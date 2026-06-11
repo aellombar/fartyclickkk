@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>Fart Clicker: Brainrot Edition</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&family=Russo+One&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="style_extra.css">
+</head>
+<body>
+    <div id="animated-bg"></div>
+    <div id="particle-overlay"></div>
+    <div id="screen-flash"></div>
+    <div id="golden-layer"></div>
+
+    <div id="game-container">
+        <header class="top-bar">
+            <div class="logo-mini">💨 FART CLICKER</div>
+            <div class="top-right">
+                <span id="aura-mini" class="aura-pill">✦ 0</span>
+                <button class="gear-btn" onclick="openSheet('settings')" aria-label="Settings">⚙️</button>
+            </div>
+        </header>
+
+        <div class="stats-panel">
+            <div class="stat-hero">
+                <span id="points" class="hero-value">0</span>
+                <span class="hero-label">STINK 💨</span>
+            </div>
+            <div class="stat-grid">
+                <div class="stat-cell"><span class="stat-label">Per Click</span><span id="per-click" class="stat-value">1</span></div>
+                <div class="stat-cell"><span class="stat-label">Per Sec</span><span id="passive-income" class="stat-value">0</span></div>
+                <div class="stat-cell"><span class="stat-label">Rebirths</span><span id="rebirths" class="stat-value">0</span></div>
+                <div class="stat-cell"><span class="stat-label">World</span><span id="world-name" class="stat-value">Basement</span></div>
+            </div>
+        </div>
+
+        <div class="clicker-zone">
+            <div class="combo-wrap">
+                <div class="combo-track"><div id="combo-bar"></div></div>
+                <span id="combo-label">COMBO x1.0</span>
+            </div>
+            <button id="main-btn" class="main-click-btn">
+                <span class="main-emoji">💨</span>
+                <span class="main-label">CLICK</span>
+            </button>
+        </div>
+
+        <button onclick="rebirth()" id="rebirth-btn" class="rebirth-btn">🔄 REBIRTH<span class="rb-cost">1M 💨</span></button>
+    </div>
+
+    <nav class="bottom-nav">
+        <button class="nav-btn" data-sheet="upgrades" onclick="openSheet('upgrades')"><span class="nav-ico">🛒</span><span class="nav-txt">Upgrades</span></button>
+        <button class="nav-btn" data-sheet="pets" onclick="openSheet('pets')"><span class="nav-ico">🐾</span><span class="nav-txt">Pets</span></button>
+        <button class="nav-btn" data-sheet="worlds" onclick="openSheet('worlds')"><span class="nav-ico">🌍</span><span class="nav-txt">Worlds</span></button>
+        <button class="nav-btn" data-sheet="aura" onclick="openSheet('aura')"><span class="nav-ico">✦</span><span class="nav-txt">Aura</span></button>
+    </nav>
+
+    <div class="sheet-overlay" id="sheet-overlay" onclick="closeSheet()"></div>
+
+
+    <!-- Upgrades Sheet -->
+    <div class="sheet" id="sheet-upgrades">
+        <div class="sheet-head"><h2>🛒 Upgrades</h2><button class="sheet-close" onclick="closeSheet()">&times;</button></div>
+        <div class="sheet-tabs">
+            <button class="stab active" onclick="showUpTab('click', this)">⬆️ Click</button>
+            <button class="stab" onclick="showUpTab('passive', this)">💰 Passive</button>
+            <button class="stab" onclick="showUpTab('slots', this)">🐾 Slots</button>
+        </div>
+        <div class="buymode-row">
+            <span class="buymode-label">Buy:</span>
+            <button class="buymode-btn active" onclick="setBuyMode(1, this)">x1</button>
+            <button class="buymode-btn" onclick="setBuyMode(10, this)">x10</button>
+            <button class="buymode-btn" onclick="setBuyMode(100, this)">x100</button>
+            <button class="buymode-btn" onclick="setBuyMode('max', this)">MAX</button>
+        </div>
+        <div class="sheet-body">
+            <div id="up-click" class="up-tab active"></div>
+            <div id="up-passive" class="up-tab"></div>
+            <div id="up-slots" class="up-tab"></div>
+        </div>
+    </div>
+
+    <!-- Pets Sheet (tabs: collection / fuse / index) -->
+    <div class="sheet" id="sheet-pets">
+        <div class="sheet-head"><h2>🐾 Pets</h2><button class="sheet-close" onclick="closeSheet()">&times;</button></div>
+        <div class="sheet-tabs">
+            <button class="stab active" onclick="showPetTab('collection', this)">🎒 Collection</button>
+            <button class="stab" onclick="showPetTab('fuse', this)">✨ Fuse</button>
+            <button class="stab" onclick="showPetTab('index', this)">📖 Index</button>
+        </div>
+        <div class="sheet-body" id="pets-body"></div>
+    </div>
+
+    <!-- Worlds Sheet -->
+    <div class="sheet" id="sheet-worlds">
+        <div class="sheet-head"><h2>🌍 Worlds</h2><button class="sheet-close" onclick="closeSheet()">&times;</button></div>
+        <div class="sheet-body" id="worlds-body"></div>
+    </div>
+
+    <!-- Aura Sheet -->
+    <div class="sheet" id="sheet-aura">
+        <div class="sheet-head"><h2>✦ Aura Prestige</h2><button class="sheet-close" onclick="closeSheet()">&times;</button></div>
+        <div class="sheet-body" id="aura-body"></div>
+    </div>
+
+
+    <!-- Settings Sheet -->
+    <div class="sheet" id="sheet-settings">
+        <div class="sheet-head"><h2>⚙️ Settings</h2><button class="sheet-close" onclick="closeSheet()">&times;</button></div>
+        <div class="sheet-body">
+            <div class="now-playing-row">🎧 <span id="now-playing">♪ —</span><button class="skip-btn" onclick="skipTrack()">⏭ Skip</button></div>
+            <div class="set-group">
+                <label class="set-row"><span>🎵 Music Volume</span><span id="music-vol-val" class="set-val">35%</span></label>
+                <input type="range" id="music-vol" min="0" max="100" value="35" class="slider" oninput="setMusicVol(this.value)">
+            </div>
+            <div class="set-group">
+                <label class="set-row"><span>🔊 SFX Volume</span><span id="sfx-vol-val" class="set-val">70%</span></label>
+                <input type="range" id="sfx-vol" min="0" max="100" value="70" class="slider" oninput="setSfxVol(this.value)">
+            </div>
+            <div class="set-group toggles">
+                <button class="toggle-row" id="tg-music" onclick="toggleSetting('musicOn', this)"><span>🎶 Music</span><span class="toggle-pill">ON</span></button>
+                <button class="toggle-row" id="tg-particles" onclick="toggleSetting('particles', this)"><span>✨ Particles</span><span class="toggle-pill">ON</span></button>
+                <button class="toggle-row" id="tg-shake" onclick="toggleSetting('screenShake', this)"><span>📳 Screen Shake</span><span class="toggle-pill">ON</span></button>
+                <button class="toggle-row" id="tg-brainrot" onclick="toggleSetting('brainrot', this)"><span>🧠 Brainrot Mode</span><span class="toggle-pill">ON</span></button>
+            </div>
+            <div class="set-group">
+                <button class="set-action" onclick="exportSave()">📤 Export Save</button>
+                <button class="set-action" onclick="importSave()">📥 Import Save</button>
+                <button class="set-action danger" onclick="hardReset()">🗑️ Reset Everything</button>
+            </div>
+            <p class="set-credit">Fart Clicker: Brainrot Edition · made with 💨</p>
+        </div>
+    </div>
+
+    <!-- Egg Modal -->
+    <div id="egg-modal" class="modal hidden">
+        <div class="modal-content egg-modal-content">
+            <button class="close-btn" onclick="closeEggModal()">&times;</button>
+            <h2>🥚 Hatch Eggs</h2>
+            <p class="egg-balance">You have <b id="egg-balance">0</b> 💨</p>
+            <div id="egg-selection"></div>
+        </div>
+    </div>
+
+    <!-- Hatch Overlay -->
+    <div id="hatch-overlay" class="hatch-overlay hidden" onclick="overlayTap()">
+        <div class="hatch-rays" id="hatch-rays"></div>
+        <div class="hatch-vignette"></div>
+        <div class="hatch-stage">
+            <div id="hatch-egg" class="hatch-egg">🥚</div>
+            <div id="hatch-result" class="hatch-result"></div>
+        </div>
+        <button id="hatch-skip" class="hatch-skip" onclick="finishHatch()">Tap to continue</button>
+    </div>
+
+    <!-- Pet Modal -->
+    <div id="pet-modal" class="modal hidden">
+        <div class="modal-content pet-modal-content">
+            <button class="close-btn" onclick="closePetModal()">&times;</button>
+            <div id="pet-details"></div>
+            <div class="modal-actions">
+                <button id="equip-btn" class="modal-btn" onclick="equipPet()">Equip</button>
+                <button class="modal-btn secondary" onclick="closePetModal()">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Offline Modal -->
+    <div id="offline-modal" class="modal hidden">
+        <div class="modal-content offline-content">
+            <div class="offline-emoji">😴💨</div>
+            <h2>Welcome Back!</h2>
+            <p class="offline-text">While you were gone your farts earned:</p>
+            <div id="offline-amount" class="offline-amount">0 💨</div>
+            <button class="modal-btn" onclick="claimOffline()">Collect 🤑</button>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>

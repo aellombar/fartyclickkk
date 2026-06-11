@@ -1,0 +1,211 @@
+/* ============================================================
+   EXTRA STYLES — buy-mode, multi-open, brighter nav, FX, themes
+   ============================================================ */
+
+/* ---- buy-mode row in upgrades sheet ---- */
+.buymode-row {
+    display: flex; align-items: center; gap: 7px;
+    padding: 8px 18px 12px; background: rgba(0,0,0,0.25);
+    border-bottom: 1px solid var(--stroke);
+}
+.buymode-label { font-size: 0.78rem; color: var(--muted); font-weight: 700; flex-shrink: 0; }
+.buymode-btn {
+    flex: 1; padding: 9px 4px; border: 1px solid var(--stroke); border-radius: 10px;
+    background: rgba(0,0,0,0.3); color: var(--muted);
+    font-family: 'Fredoka', sans-serif; font-weight: 700; font-size: 0.82rem; cursor: pointer;
+    transition: all 0.15s ease;
+}
+.buymode-btn.active {
+    background: linear-gradient(135deg, var(--green), #45c400);
+    color: #0a0612; border-color: var(--green);
+    box-shadow: 0 4px 12px rgba(127,255,0,0.4);
+}
+.buy-badge {
+    display: inline-block; font-size: 0.6rem; font-weight: 700;
+    background: rgba(0,224,255,0.2); color: var(--cyan);
+    padding: 1px 6px; border-radius: 8px; margin-left: 4px;
+    vertical-align: middle;
+}
+
+/* ---- multi-open buttons below egg cards ---- */
+.egg-buy-multi {
+    width: 100%; margin-top: 5px; padding: 8px 4px; border: none; border-radius: 10px;
+    background: linear-gradient(135deg, var(--purple), var(--pink));
+    color: #fff; font-family: 'Fredoka', sans-serif; font-weight: 700; font-size: 0.7rem; cursor: pointer;
+    opacity: 0.9;
+}
+.egg-buy-multi.mega {
+    background: linear-gradient(135deg, var(--gold), var(--orange));
+    color: #1a0e00;
+}
+.egg-buy-multi:active { transform: scale(0.96); }
+.egg-buy-multi.locked {
+    background: rgba(120,120,140,0.35) !important;
+    color: var(--muted) !important;
+    cursor: not-allowed;
+    opacity: 0.55;
+}
+.egg-buy-multi.locked:active { transform: none; }
+
+/* ---- brighter, more readable bottom nav ---- */
+.bottom-nav {
+    background: linear-gradient(180deg, rgba(22,10,44,0.98), rgba(10,5,20,1)) !important;
+    border-top: 2px solid var(--stroke) !important;
+    box-shadow: 0 -10px 40px rgba(0,0,0,0.6) !important;
+}
+.nav-btn .nav-txt {
+    color: #e8d6ff !important;
+    font-size: 0.76rem !important;
+    font-weight: 700 !important;
+    text-shadow: 0 0 8px rgba(177,78,255,0.6) !important;
+}
+.nav-btn .nav-ico { font-size: 1.6rem !important; }
+.nav-btn:hover .nav-txt { color: #fff !important; }
+
+/* ---- fuse-card dim state (not enough pets yet) ---- */
+.fuse-card.dim { opacity: 0.5; }
+
+/* ---- lightning bolt FX ---- */
+.lightning-bolt {
+    position: absolute; top: 0; width: 4px; height: 100vh;
+    pointer-events: none; z-index: 95;
+    animation: boltFlash 0.4s ease-out forwards;
+    filter: blur(1px);
+}
+@keyframes boltFlash {
+    0% { opacity: 1; transform: scaleX(1); }
+    50% { opacity: 0.9; transform: scaleX(2); }
+    100% { opacity: 0; transform: scaleX(0.5); }
+}
+
+/* ---- spotlight beam FX ---- */
+.spot-beam {
+    position: absolute; top: 0; left: 50%; transform: translateX(-50%);
+    width: 160px; height: 100vh; pointer-events: none; z-index: 94;
+    animation: beamFade 1.2s ease-out forwards;
+}
+@keyframes beamFade {
+    0% { opacity: 0; } 15% { opacity: 1; } 100% { opacity: 0; }
+}
+
+/* ---- rainbow aura on main button (always on, not just on click) ---- */
+.main-click-btn::before {
+    opacity: 1 !important;
+    animation: auraSpin 5s linear infinite !important;
+}
+
+/* ---- "on-fire" button state at high combo ---- */
+.main-click-btn.on-fire::before {
+    opacity: 1 !important;
+    filter: blur(22px) !important;
+    animation: auraSpin 1.5s linear infinite !important;
+}
+
+/* ---- world-specific stat-cell colors ---- */
+.stat-cell .stat-value { color: var(--cyan); }
+.stat-cell.big .stat-value, .hero-value { color: var(--green) !important; text-shadow: 0 0 26px var(--green) !important; }
+
+
+/* ============================================================
+   AMBIENT SCREEN EFFECTS — floating orbs, streaks, pulses
+   ============================================================ */
+
+/* Floating orbs that drift around the background */
+.amb-orb {
+    position: fixed;
+    border-radius: 50%;
+    pointer-events: none;
+    z-index: -1;
+    filter: blur(40px);
+    opacity: 0;
+    animation: orbDrift linear infinite;
+}
+@keyframes orbDrift {
+    0%   { transform: translate(0, 0) scale(0.8); opacity: 0; }
+    15%  { opacity: 0.35; }
+    50%  { transform: translate(var(--dx), var(--dy)) scale(1.2); opacity: 0.25; }
+    85%  { opacity: 0.3; }
+    100% { transform: translate(var(--dx2), var(--dy2)) scale(0.9); opacity: 0; }
+}
+
+/* Shooting streaks across the screen */
+.amb-streak {
+    position: fixed;
+    height: 2px;
+    border-radius: 2px;
+    pointer-events: none;
+    z-index: -1;
+    opacity: 0;
+    animation: streakFly linear forwards;
+}
+@keyframes streakFly {
+    0%   { opacity: 0; transform: translateX(-120px) rotate(var(--ang)); }
+    10%  { opacity: 0.7; }
+    90%  { opacity: 0.5; }
+    100% { opacity: 0; transform: translateX(calc(120vw + 120px)) rotate(var(--ang)); }
+}
+
+/* Pulsing ring glow that expands and fades */
+.amb-ring {
+    position: fixed;
+    border-radius: 50%;
+    border: 2px solid transparent;
+    pointer-events: none;
+    z-index: -1;
+    opacity: 0;
+    animation: ringPulse ease-out forwards;
+}
+@keyframes ringPulse {
+    0%   { transform: scale(0.2); opacity: 0.8; }
+    100% { transform: scale(4); opacity: 0; }
+}
+
+/* Floating sparkle dots */
+.amb-spark {
+    position: fixed;
+    width: 4px; height: 4px;
+    border-radius: 50%;
+    pointer-events: none;
+    z-index: 0;
+    opacity: 0;
+    animation: sparkFloat ease-out forwards;
+}
+@keyframes sparkFloat {
+    0%   { transform: translateY(0) scale(1); opacity: 0.9; }
+    100% { transform: translateY(var(--rise)) scale(0); opacity: 0; }
+}
+
+/* Corner glow blobs that slowly breathe */
+.corner-glow {
+    position: fixed;
+    width: 300px; height: 300px;
+    border-radius: 50%;
+    pointer-events: none;
+    z-index: -2;
+    filter: blur(80px);
+    opacity: 0.18;
+    animation: cornerBreathe 5s ease-in-out infinite alternate;
+}
+.corner-glow.tl { top: -80px; left: -80px; }
+.corner-glow.tr { top: -80px; right: -80px; }
+.corner-glow.bl { bottom: 60px; left: -80px; }
+.corner-glow.br { bottom: 60px; right: -80px; }
+@keyframes cornerBreathe {
+    0%   { opacity: 0.12; transform: scale(0.9); }
+    100% { opacity: 0.28; transform: scale(1.15); }
+}
+
+/* More particles floating up */
+.particle {
+    width: 5px; height: 5px;
+    animation: floatUp linear infinite;
+}
+
+
+/* ---- Pet sort + toolbar ---- */
+.pet-toolbar { display:flex; gap:8px; margin-bottom:10px; }
+.action-btn.slim { flex:1; padding:9px 8px; font-size:0.82rem; }
+.equip-best-btn { background:linear-gradient(135deg,#ffd54a,#ff8a3d) !important; color:#1a0e00 !important; }
+.sort-row { display:flex; gap:6px; margin-bottom:12px; }
+.sort-btn { flex:1; padding:7px 4px; border:1px solid var(--stroke); border-radius:10px; background:rgba(255,255,255,0.07); color:var(--muted); font-family:'Fredoka',sans-serif; font-weight:700; font-size:0.72rem; cursor:pointer; transition:all 0.15s ease; }
+.sort-btn.active { background:rgba(177,78,255,0.25); color:#fff; border-color:var(--purple); box-shadow:0 0 8px rgba(177,78,255,0.4); }
