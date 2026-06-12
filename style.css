@@ -44,7 +44,7 @@ body {
     max-width:520px; margin:0 auto; position:relative; z-index:1;
     min-height:calc(100dvh - env(safe-area-inset-top, 0px));
     min-height:calc(100svh - env(safe-area-inset-top, 0px));
-    padding:8px 12px calc(var(--nav-h) + var(--footer-h) + 20px);
+    padding:8px 12px calc(var(--nav-h) + var(--footer-h) + 24px);
     display:flex; flex-direction:column;
 }
 #game-container.shake { animation:shakeAnim 0.45s; }
@@ -79,8 +79,8 @@ body {
 
 
 /* ---- clicker ---- */
-.clicker-zone { display:flex; flex-direction:column; align-items:center; justify-content:center; flex:1 1 auto; min-height:160px; padding:2px 0 6px; margin-top:2px; }
-.combo-wrap { width:min(70vw,280px); margin-bottom:clamp(8px, 3vw, 20px); }
+.clicker-zone { display:flex; flex-direction:column; align-items:center; justify-content:center; flex:1 1 auto; min-height:0; padding:2px 0 6px; margin-top:2px; }
+.combo-wrap { width:min(70vw,280px); margin-bottom:clamp(8px, 3vw, 20px); position:relative; z-index:2; }
 .combo-track { height:10px; background:rgba(0,0,0,0.4); border-radius:10px; overflow:hidden; border:1px solid var(--stroke); }
 #combo-bar { height:100%; width:0%; border-radius:10px; background:linear-gradient(90deg,var(--cyan),var(--pink),var(--gold)); transition:width 0.15s ease; box-shadow:0 0 12px var(--pink); }
 #combo-label { display:block; font-size:0.72rem; letter-spacing:1px; color:var(--muted); margin-top:5px; font-weight:700; }
@@ -104,10 +104,10 @@ body {
 
 /* ---- rebirth (fixed above bottom nav) ---- */
 .game-footer {
-    position:fixed; left:0; right:0; bottom:var(--nav-h); z-index:85;
-    max-width:520px; margin:0 auto;
-    padding:8px 12px 10px;
-    background:linear-gradient(to top, rgba(8,4,15,0.97) 55%, rgba(8,4,15,0));
+    position:fixed; left:50%; transform:translateX(-50%); right:auto; bottom:var(--nav-h); z-index:86;
+    width:100%; max-width:520px; margin:0 auto;
+    padding:10px 12px 12px;
+    background:linear-gradient(to top, var(--bg0) 60%, transparent);
     pointer-events:none;
 }
 .game-footer .rebirth-btn { pointer-events:auto; }

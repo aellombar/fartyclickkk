@@ -162,11 +162,6 @@ function toggleLiteParticles(btn) {
 
 function handleRebirthTap(e) {
     if (e) e.stopPropagation();
-    const btn = document.getElementById("rebirth-btn");
-    if (!btn || !btn.classList.contains("expanded")) {
-        toggleRebirthExpand();
-        return;
-    }
     rebirth();
 }
 

@@ -290,8 +290,10 @@ function renderBuildingsTab() {
         const bmArg = bm === "max" ? "'max'" : bm;
         const bmLabel = bm === "max" ? "MAX" : ("x" + bm);
         const mgrOn = !!mgr[b.id];
-        html += '<div class="building-mgr-row ' + (mgrOn ? "on" : "") + '"><span>' + b.icon + ' ' + b.name + ' mgr</span>' +
-            '<button class="meta-btn small" onclick="toggleBuildingManager(\'' + b.id + '\')">' + (mgrOn ? "ON" : "OFF") + '</button></div>';
+        if (!locked) {
+            html += '<div class="building-mgr-row ' + (mgrOn ? "on" : "") + '"><span>👔 ' + b.name + ' manager</span>' +
+                '<button class="mgr-toggle ' + (mgrOn ? "on" : "") + '" onclick="event.stopPropagation();toggleBuildingManager(\'' + b.id + '\')">' + (mgrOn ? "AUTO" : "OFF") + '</button></div>';
+        }
         html += '<button class="up-card ' + (locked ? "locked" : "") + '" onclick="buyBuilding(\'' + b.id + '\',' + bmArg + ')">' +
             '<span class="up-ico">' + b.icon + '</span><div class="up-mid"><div class="up-name">' + b.name + ' <span class="buy-badge">' + bmLabel + '</span></div>' +
             '<div class="up-stat">+' + b.baseProd + '/s each · own ' + owned + '</div>' +
@@ -943,7 +945,7 @@ function showHubTab(name, btn) {
     if (typeof updateHubNavBadge === "function") updateHubNavBadge();
 }
 
-function renderHub() { showHubTab("achievements", document.querySelector("#sheet-hub .hstab")); }
+function renderHub() { showHubTab("quests", document.querySelector("#sheet-hub .hstab")); }
 
 function initMeta() {
     ensureMeta();

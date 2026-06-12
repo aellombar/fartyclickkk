@@ -285,16 +285,17 @@ function invasionRankTitle() {
     return "🪖 Recruit";
 }
 
-// ---------- MEME WEEK MAIN ICON ----------
+// ---------- MEME WEEK VISUALS (egg foil only — main icon stays the fart) ----------
 function applyMemeWeekVisuals() {
-    if (typeof currentMemePet !== "function") return;
-    const meme = currentMemePet();
-    const mainIco = document.querySelector(".main-icon-img");
-    if (mainIco && meme.emoji) {
-        mainIco.textContent = meme.emoji;
-        mainIco.style.fontSize = "inherit";
-    }
     document.documentElement.style.setProperty("--meme-egg-foil", "linear-gradient(135deg,#ffd54a33,#ff3d9a33)");
+}
+
+// ---------- NAV HEIGHT SYNC (keeps rebirth/footer above the real nav) ----------
+function syncNavHeight() {
+    const nav = document.querySelector(".bottom-nav");
+    if (!nav) return;
+    const h = Math.ceil(nav.getBoundingClientRect().height);
+    if (h > 0) document.documentElement.style.setProperty("--nav-h", h + "px");
 }
 
 // ---------- BUILDING MANAGER CAP ----------
@@ -444,8 +445,12 @@ function initPhase3() {
     if (game.settings.photoMode === undefined) game.settings.photoMode = false;
     applyMemeWeekVisuals();
     updateComboBarTheme();
+    syncNavHeight();
     layoutSafeZones();
     insetDocs();
-    window.addEventListener("resize", () => { layoutSafeZones(); updateCompactHudLineP3(); });
-    setInterval(layoutSafeZones, 3000);
+    window.addEventListener("resize", () => { syncNavHeight(); layoutSafeZones(); updateCompactHudLineP3(); });
+    window.addEventListener("orientationchange", () => setTimeout(syncNavHeight, 200));
+    setTimeout(syncNavHeight, 300);
+    setTimeout(syncNavHeight, 1200);
+    setInterval(() => { syncNavHeight(); layoutSafeZones(); }, 3000);
 }
