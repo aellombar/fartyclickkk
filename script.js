@@ -1515,9 +1515,104 @@ function clearHatchAnim() {
     hatchAnimTimers.forEach(t => clearTimeout(t));
     hatchAnimTimers = [];
     if (hatchTimeout) { clearTimeout(hatchTimeout); hatchTimeout = null; }
+    clearHatchFX();
 }
 function hatchDelay(fn, ms) {
     hatchAnimTimers.push(setTimeout(fn, ms));
+}
+function clearHatchFX() {
+    document.querySelectorAll(".hfx-temp").forEach(el => el.remove());
+}
+function buildHatchFX(overlay, color, tier, emoji) {
+    clearHatchFX();
+    const layer = document.createElement("div");
+    layer.className = "hatch-fx-layer hfx-temp tier" + tier;
+    layer.style.setProperty("--rc", color);
+
+    const halo = document.createElement("div");
+    halo.className = "hfx-halo";
+    layer.appendChild(halo);
+
+    const tunnel = document.createElement("div");
+    tunnel.className = "hfx-tunnel";
+    layer.appendChild(tunnel);
+
+    const orbit = document.createElement("div");
+    orbit.className = "hfx-orbit";
+    const dotCount = 12 + tier * 4;
+    for (let i = 0; i < dotCount; i++) {
+        const dot = document.createElement("span");
+        dot.className = "hfx-dot";
+        dot.textContent = i % 5 === 0 ? emoji : (i % 2 ? "✦" : "•");
+        const angle = 360 / dotCount * i;
+        const distance = 126 + tier * 14 + (i % 3) * 18;
+        dot.style.setProperty("--a", angle + "deg");
+        dot.style.setProperty("--na", (-angle) + "deg");
+        dot.style.setProperty("--nd", (-distance) + "px");
+        dot.style.animationDelay = (-i * 0.12) + "s";
+        orbit.appendChild(dot);
+    }
+    layer.appendChild(orbit);
+
+    const ringCount = 3 + Math.min(tier, 3);
+    for (let i = 0; i < ringCount; i++) {
+        const ring = document.createElement("div");
+        ring.className = "hfx-ring";
+        ring.style.animationDelay = (i * 0.22) + "s";
+        ring.style.opacity = String(0.85 - i * 0.09);
+        layer.appendChild(ring);
+    }
+
+    const shardCount = 22 + tier * 8;
+    for (let i = 0; i < shardCount; i++) {
+        const shard = document.createElement("i");
+        shard.className = "hfx-shard";
+        shard.style.left = (Math.random() * 100) + "%";
+        shard.style.top = (Math.random() * 100) + "%";
+        shard.style.setProperty("--rot", (Math.random() * 360) + "deg");
+        shard.style.setProperty("--delay", (Math.random() * -2.4) + "s");
+        shard.style.setProperty("--len", (22 + Math.random() * (44 + tier * 8)) + "px");
+        layer.appendChild(shard);
+    }
+
+    const scan = document.createElement("div");
+    scan.className = "hfx-scan";
+    layer.appendChild(scan);
+
+    overlay.insertBefore(layer, overlay.firstChild);
+    return layer;
+}
+function hatchBurstFX(color, tier, emoji) {
+    if (!game.settings.particles) return;
+    const layer = document.body;
+    const cx = window.innerWidth / 2;
+    const cy = window.innerHeight * 0.42;
+    const count = 14 + tier * 7;
+    for (let i = 0; i < count; i++) {
+        const ray = document.createElement("div");
+        ray.className = "hatch-speedline";
+        ray.style.left = cx + "px";
+        ray.style.top = cy + "px";
+        ray.style.background = "linear-gradient(90deg, transparent, " + (i % 4 ? color : "#fff") + ", transparent)";
+        const ang = (Math.PI * 2 / count) * i + Math.random() * 0.18;
+        const dist = 220 + Math.random() * (260 + tier * 80);
+        ray.style.setProperty("--dx", Math.cos(ang) * dist + "px");
+        ray.style.setProperty("--dy", Math.sin(ang) * dist + "px");
+        ray.style.setProperty("--rot", (ang * 180 / Math.PI) + "deg");
+        appendFxNode(layer, ray, 850, true);
+    }
+    const symbols = [emoji, "✦", "✨", "💫", "⭐", "◆"];
+    for (let i = 0; i < 10 + tier * 5; i++) {
+        const sigil = document.createElement("div");
+        sigil.className = "hatch-sigil";
+        sigil.textContent = symbols[i % symbols.length];
+        sigil.style.left = (14 + Math.random() * 72) + "vw";
+        sigil.style.top = (16 + Math.random() * 62) + "vh";
+        sigil.style.color = i % 3 ? color : "#fff";
+        sigil.style.fontSize = (1 + Math.random() * (1.1 + tier * 0.18)) + "rem";
+        sigil.style.animationDelay = (Math.random() * 0.18) + "s";
+        appendFxNode(layer, sigil, 1250, true);
+    }
 }
 
 function openEggModal() { closeSheet(); renderEggShop(); const m=document.getElementById("egg-modal"); if(m)m.classList.remove("hidden"); }
@@ -1620,6 +1715,7 @@ function playHatch(pet, egg) {
     overlay.classList.remove("hidden");
 
     const tier = r.tier;
+    const hatchFx = buildHatchFX(overlay, r.color, tier, pet.emoji || egg.emoji);
 
     // ---- PHASE 1: suspense build-up (scales by tier) ----
     const buildTimes = [600, 1000, 1600, 2400, 3400, 4800];
@@ -1649,6 +1745,11 @@ function playHatch(pet, egg) {
         if (tier >= 2 && ticks % 2 === 0) sparkleRise(r.color);
         if (tier >= 4 && ticks % 2 === 0) sparkleRise("#ffffff");
         if (tier >= 3 && progress > 0.6) burstAt(window.innerWidth/2, window.innerHeight*0.42, r.color, 3);
+        if (hatchFx) {
+            hatchFx.style.setProperty("--charge", progress.toFixed(2));
+            hatchFx.style.setProperty("--halo-opacity", (0.28 + progress * 0.42).toFixed(2));
+            hatchFx.style.setProperty("--tunnel-opacity", (0.12 + progress * 0.22).toFixed(2));
+        }
         ticks++;
     }, tickInterval);
 
@@ -1675,6 +1776,7 @@ function playHatch(pet, egg) {
     // ---- PHASE 3: BURST ----
     hatchDelay(() => {
         if (hatchChargeInt) { clearInterval(hatchChargeInt); hatchChargeInt = null; }
+        if (hatchFx) hatchFx.classList.add("bursting");
 
         eggEl.style.transition = "transform 0.12s ease, filter 0.12s ease";
         eggEl.style.transform = "scale(0.05)";
@@ -1685,6 +1787,7 @@ function playHatch(pet, egg) {
         hatchDelay(() => { overlay.style.background = "rgba(5,2,12,0.97)"; }, 120);
 
         shockwave(r.color);
+        hatchBurstFX(r.color, tier, pet.emoji || egg.emoji);
         spawnConfetti(r.color, 25 + tier * 45);
         sfxRare(tier);
 
@@ -1739,6 +1842,7 @@ function playHatch(pet, egg) {
         // ---- PHASE 4: REVEAL ----
         const revealDelay = 280 + tier * 120;
         hatchDelay(() => {
+            if (hatchFx) hatchFx.classList.add("revealed");
             eggEl.textContent = pet.emoji;
             eggEl.style.opacity = "1";
             eggEl.style.transition = "transform 0.5s cubic-bezier(0.34,1.56,0.64,1), filter 0.5s ease";
@@ -1793,6 +1897,7 @@ function finishHatch() {
     if (hatchTimeout) { clearTimeout(hatchTimeout); hatchTimeout = null; }
     hatchAnimTimers.forEach(t => clearTimeout(t));
     hatchAnimTimers = [];
+    clearHatchFX();
     const overlay = document.getElementById("hatch-overlay"), rays = document.getElementById("hatch-rays");
     const resEl = document.getElementById("hatch-result");
     if (rays) rays.classList.remove("spin");
