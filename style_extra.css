@@ -263,7 +263,8 @@
     width: 1em;
     height: 1em;
     vertical-align: middle;
-    background-image: url("assets/brainrot-skibidi-asset-pack.png");
+    background-color: transparent;
+    background-image: url("assets/brainrot-skibidi-asset-pack.png?v=2");
     background-size: 400% 400%;
     background-repeat: no-repeat;
     border-radius: 24%;
