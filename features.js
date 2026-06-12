@@ -89,6 +89,7 @@ function toggleRebirthExpand() {
     if (!btn) return;
     btn.classList.toggle("expanded");
     game.settings.rebirthExpanded = btn.classList.contains("expanded");
+    document.documentElement.style.setProperty("--footer-h", btn.classList.contains("expanded") ? "64px" : "52px");
     saveGame();
 }
 
@@ -97,6 +98,7 @@ function applyRebirthPill() {
     if (!btn) return;
     if (game.settings.rebirthExpanded) btn.classList.add("expanded");
     else btn.classList.remove("expanded");
+    document.documentElement.style.setProperty("--footer-h", btn.classList.contains("expanded") ? "64px" : "52px");
 }
 
 // ---------- UI SCALE / LITE PARTICLES / FPS ----------
@@ -131,7 +133,7 @@ function startFpsMonitor() {
             fpsLast = now;
             if (fps < 30) {
                 if (!fpsLowSince) fpsLowSince = now;
-                if (now - fpsLowSince > 5000 && !game.settings.performanceMode) {
+                if (now - fpsLowSince > 5000 && !game.settings.performanceMode && !game.settings.disableAutoPerf) {
                     game.settings.performanceMode = true;
                     game.settings.particlesLite = true;
                     if (typeof applyPerformanceProfile === "function") applyPerformanceProfile();
@@ -160,11 +162,6 @@ function toggleLiteParticles(btn) {
 
 function handleRebirthTap(e) {
     if (e) e.stopPropagation();
-    const btn = document.getElementById("rebirth-btn");
-    if (!btn || !btn.classList.contains("expanded")) {
-        toggleRebirthExpand();
-        return;
-    }
     rebirth();
 }
 
@@ -236,10 +233,12 @@ function initDraggableToilet() {
 // ---------- DAILY LOGIN ----------
 function checkDailyLogin() {
     const f = ensureFeatures();
+    if (typeof checkDailyLoginGrace === "function") checkDailyLoginGrace();
     const today = new Date().toDateString();
     if (f.lastLoginDay === today) return;
     const yesterday = new Date(Date.now() - 86400000).toDateString();
     if (f.lastLoginDay === yesterday) f.loginStreak = (f.loginStreak || 0) + 1;
+    else if (f.lastLoginDay && f.lastLoginDay !== yesterday) f.loginStreak = 1;
     else f.loginStreak = 1;
     f.lastLoginDay = today;
     f.loginClaimed = false;
@@ -280,7 +279,11 @@ function claimDailyLogin() {
     const day = Math.min(7, f.loginStreak || 1);
     const chips = day === 7 ? 50 : day * 3;
     grantChips(chips, "daily login");
-    if (day === 7) game.points += getClickPower() * getPetMult() * 200;
+    if (day === 7) {
+        game.points += getClickPower() * getPetMult() * 200;
+        if (typeof ensurePhase3 === "function") ensurePhase3().cosmetics.titleBorder = true;
+        showToast("👑 Day 7: Exclusive title border unlocked!", 3000);
+    }
     renderDailyLoginCalendar();
     saveGame();
     showToast("🎁 Day " + day + " reward!", 2500);
@@ -355,6 +358,7 @@ function renderShowcasePet() {
     const r = RARITY[pet.rarity] || RARITY.common;
     el.innerHTML = '<span class="showcase-emoji">' + (pet.emoji || "🐾") + '</span>' +
         '<span class="showcase-name" style="color:' + r.color + '">' + petDisplayName(pet) + '</span>';
+    el.onclick = typeof onShowcaseTap === "function" ? onShowcaseTap : null;
 }
 
 function renderPetExtrasInModal(pet) {
@@ -369,10 +373,17 @@ function renderLoadoutsTab() {
     const el = document.getElementById("pets-body");
     if (!el) return;
     const f = ensureFeatures();
+    if (typeof ensurePhase3 === "function") ensurePhase3();
+    const names = f.loadoutNames || ["Team 1", "Team 2", "Team 3"];
     let html = '<p class="meta-hint">Save up to 3 equip teams.</p><div class="loadout-row">';
     for (let i = 0; i < 3; i++) {
         const active = f.activeLoadout === i;
-        html += '<div class="loadout-card ' + (active ? "active" : "") + '"><b>Team ' + (i + 1) + '</b>' +
+        const lo = f.loadouts[i] || { ids: [] };
+        const emojis = typeof loadoutPetEmojis === "function" ? loadoutPetEmojis(lo.ids) : "";
+        const nm = names[i] || ("Team " + (i + 1));
+        html += '<div class="loadout-card ' + (active ? "active" : "") + '">' +
+            '<input class="pet-nick-input" value="' + nm.replace(/"/g, "&quot;") + '" onchange="renameLoadout(' + i + ', this.value)">' +
+            '<div class="loadout-emojis">' + emojis + '</div>' +
             '<button onclick="applyLoadout(' + i + ')">Equip</button>' +
             '<button onclick="saveLoadout(' + i + ')">Save</button></div>';
     }
@@ -391,13 +402,18 @@ function toggleBuildingManager(id) {
 function tickBuildingManagers() {
     if (typeof BUILDINGS === "undefined") return;
     const f = ensureFeatures();
+    if (typeof ensurePhase3 === "function") ensurePhase3().managerBuysSession = {};
     const m = ensureMeta();
     BUILDINGS.forEach(b => {
         if (!f.buildingManagers[b.id]) return;
         if (peakWorld() < b.reqWorld) return;
         const owned = m.buildings[b.id] || 0;
+        if (typeof managerBuyAllowed === "function" && !managerBuyAllowed(b.id, owned)) return;
         const cost = typeof buildingCost === "function" ? buildingCost(b, owned) : Infinity;
-        if (game.points >= cost) buyBuilding(b.id, 1);
+        if (game.points >= cost) {
+            buyBuilding(b.id, 1);
+            if (typeof recordManagerBuy === "function") recordManagerBuy(b.id);
+        }
     });
 }
 
@@ -487,6 +503,7 @@ function claimSeasonTier(t) {
     sp.claimed = sp.claimed || [];
     sp.claimed.push(t);
     grantChips(t % 5 === 0 ? 10 : 5, "season pass");
+    if (typeof grantSeasonCosmetic === "function") grantSeasonCosmetic(t);
     renderSeasonPass();
     saveGame();
 }
@@ -499,7 +516,7 @@ function renderGardenChart() {
         '<div class="cross-row">🌱 + 🌟 → Golden Bean</div>' +
         '<div class="cross-row">🌱 + 🌽 → Cursed Corn</div>' +
         '<div class="cross-row">🌟 + 🌽 → Secret Spore</div>' +
-        '<p class="meta-hint">Plant adjacent different seeds (coming soon: auto-crossbreed)</p></div>';
+        '<p class="meta-hint">Plant adjacent different seeds to crossbreed (live in garden).</p></div>';
 }
 
 // ---------- STOCK SPARKLINE ----------
@@ -526,6 +543,7 @@ function memeEggEmoji() {
 
 // ---------- PHOTO CARD ENHANCED ----------
 function exportPhotoCardEnhanced() {
+    if (typeof exportPhotoCardWithQr === "function") return exportPhotoCardWithQr();
     if (!window._lastHatchPhoto) { showToast("Hatch something first!", 2000); return; }
     const p = window._lastHatchPhoto;
     const canvas = document.createElement("canvas");

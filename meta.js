@@ -10,7 +10,7 @@ function freshMetaState() {
             totalClicks: 0, totalHatches: 0, totalRebirths: 0, totalAscensions: 0,
             minesLost: 0, minesWon: 0, wheelSpins: 0, scratchWins: 0, crateOpens: 0,
             gambles: 0, stocksTrades: 0, gardenHarvests: 0, invasionWins: 0,
-            secretsFound: 0, bankruptcies: 0, legendariesHatched: 0, secretsHatched: 0,
+            secretsFound: 0, bankruptcies: 0, diamondHands: 0, legendariesHatched: 0, secretsHatched: 0,
             petsFused: 0, questTokens: 0, hiddenClicks: 0, toiletClicks: 0
         },
         buildings: {},
@@ -93,6 +93,7 @@ function buildAchievementList() {
     [1,3,5,10].forEach((t, i) =>
         add("inv_" + t, "Defend " + t, "Win invasions " + t, "invasionWins", t, 2 + i * 0.5));
     add("bankrupt_1", "Bankrupt", "Go bankrupt in stocks", "bankruptcies", 1, 3);
+    add("diamond_hands", "Diamond Hands", "Hold stocks through a crash event", "diamondHands", 1, 4);
     add("toilet_1000", "Skibidi Scholar", "Click toilet 1000× in Skibidi world", "toiletClicks", 1000, 8, { luck: 0.03 });
     add("hidden_20", "Easter Hunter", "Find 20 hidden secrets", "secretsFound", 20, 6);
     add("konami_1", "Konami Code", "Enter the konami code", "konamiUnlocked", 1, 5);
@@ -289,8 +290,10 @@ function renderBuildingsTab() {
         const bmArg = bm === "max" ? "'max'" : bm;
         const bmLabel = bm === "max" ? "MAX" : ("x" + bm);
         const mgrOn = !!mgr[b.id];
-        html += '<div class="building-mgr-row ' + (mgrOn ? "on" : "") + '"><span>' + b.icon + ' ' + b.name + ' mgr</span>' +
-            '<button class="meta-btn small" onclick="toggleBuildingManager(\'' + b.id + '\')">' + (mgrOn ? "ON" : "OFF") + '</button></div>';
+        if (!locked) {
+            html += '<div class="building-mgr-row ' + (mgrOn ? "on" : "") + '"><span>👔 ' + b.name + ' manager</span>' +
+                '<button class="mgr-toggle ' + (mgrOn ? "on" : "") + '" onclick="event.stopPropagation();toggleBuildingManager(\'' + b.id + '\')">' + (mgrOn ? "AUTO" : "OFF") + '</button></div>';
+        }
         html += '<button class="up-card ' + (locked ? "locked" : "") + '" onclick="buyBuilding(\'' + b.id + '\',' + bmArg + ')">' +
             '<span class="up-ico">' + b.icon + '</span><div class="up-mid"><div class="up-name">' + b.name + ' <span class="buy-badge">' + bmLabel + '</span></div>' +
             '<div class="up-stat">+' + b.baseProd + '/s each · own ' + owned + '</div>' +
@@ -393,6 +396,7 @@ function plantGarden(idx, seedId) {
     plot.plantedAt = Date.now();
     const growMult = ascensionMutatorMult("garden");
     plot.readyAt = plot.plantedAt + (GARDEN_SEEDS.find(s => s.id === seedId)?.growMs || 60000) / (growMult > 1 ? growMult : 1);
+    if (typeof tryGardenCrossbreed === "function") tryGardenCrossbreed(idx);
     sfxBuy(); saveGame(); renderGarden();
 }
 
@@ -457,6 +461,11 @@ function tickStocks() {
         if (Math.random() < 0.04) {
             const news = ["Ohio incident", "Skibidi rally", "Rizz collapse", "Stink IPO"];
             showToast("📰 " + news[Math.floor(Math.random() * news.length)] + " — $" + t + "!", 2200);
+            const held = m.stocks.holdings[t] || 0;
+            if (held > 0) {
+                m.stocks.crashHeld = true;
+                trackStat("diamondHands", 1);
+            }
             m.stocks.prices[t] *= 0.6 + Math.random() * 0.8;
         } else {
             m.stocks.prices[t] = Math.max(1, m.stocks.prices[t] * (1 + shock));
@@ -474,6 +483,7 @@ function buyStock(ticker, amt) {
     if (game.points < cost) { sfxError(); return; }
     game.points -= cost;
     m.stocks.holdings[ticker] = (m.stocks.holdings[ticker] || 0) + amt;
+    if (typeof recordStockBuy === "function") recordStockBuy(ticker, amt, price);
     trackStat("stocksTrades", 1);
     saveGame(); renderStocks();
 }
@@ -507,6 +517,11 @@ function renderStocks() {
             '<button onclick="sellStock(\'' + t + '\',1)">Sell</button></div>';
     });
     html += '<div id="stock-sparkline"></div>';
+    if (typeof stockPortfolioPl === "function") {
+        const pl = stockPortfolioPl();
+        const sign = pl.pl >= 0 ? "+" : "";
+        html += '<p class="meta-hint">Portfolio: ' + fmt(pl.value) + ' · P/L: <b style="color:' + (pl.pl >= 0 ? "#7fff00" : "#ff3d9a") + '">' + sign + fmt(pl.pl) + '</b></p>';
+    }
     html += '<button class="meta-btn danger" onclick="sellAllStocksPanic()">💀 PANIC SELL ALL</button>';
     html += '<button class="meta-btn danger" onclick="declareBankruptcy()">📉 Declare Bankruptcy</button>';
     el.innerHTML = html;
@@ -606,6 +621,7 @@ function completeQuest(q) {
     if (q.reward.chips) grantChips(q.reward.chips, "quest");
     if (q.reward.tokens) { ensureMeta().quests.tokens = (ensureMeta().quests.tokens || 0) + q.reward.tokens; }
     if (q.reward.key && game.casino) game.casino.crateKeys = (game.casino.crateKeys || 0) + q.reward.key;
+    if (typeof addSeasonXp === "function") addSeasonXp(15);
     showToast("✅ Quest: " + q.label, 2800);
     saveGame();
 }
@@ -615,15 +631,43 @@ function renderQuests() {
     if (!el) return;
     rollQuests();
     const m = ensureMeta();
-    let html = '<p class="meta-hint">Quest tokens: <b>' + (m.quests.tokens || 0) + '</b></p>';
+    const tokens = m.quests.tokens || 0;
+    let html = '<div class="quest-header">' +
+        '<span class="quest-token-pill">🎟️ ' + tokens + ' token' + (tokens !== 1 ? 's' : '') + '</span>' +
+        '<span class="meta-hint" style="margin:0">Resets daily · tokens spent in Ascend</span>' +
+        '</div>';
+    html += '<div class="quest-section-label">Daily</div>';
     m.quests.daily.forEach(q => {
-        html += '<div class="quest-card ' + (q.done ? "done" : "") + '"><div>' + q.label + '</div>' +
-            '<div class="quest-prog">' + Math.min(q.progress || 0, q.need) + '/' + q.need + '</div></div>';
+        const prog = Math.min(q.progress || 0, q.need);
+        const pct = Math.round((prog / q.need) * 100);
+        html += '<div class="quest-card2 ' + (q.done ? "done" : "") + '">' +
+            '<div class="quest-card2-top">' +
+            '<span class="quest-card2-label">' + (q.done ? '✅ ' : '') + q.label + '</span>' +
+            '<span class="quest-card2-prog">' + prog + ' / ' + q.need + '</span>' +
+            '</div>' +
+            '<div class="quest-bar"><div class="quest-bar-fill" style="width:' + pct + '%"></div></div>' +
+            (q.reward ? '<div class="quest-reward">' +
+                (q.reward.chips ? '+' + q.reward.chips + ' <span class="chip-coin" aria-label="chips">C</span>' : '') +
+                (q.reward.tokens ? ' +' + q.reward.tokens + ' 🎟' : '') +
+                (q.reward.key ? ' +🔑' : '') +
+            '</div>' : '') +
+            '</div>';
     });
-    (m.quests.weekly || []).forEach(q => {
-        html += '<div class="quest-card weekly ' + (q.done ? "done" : "") + '"><div>📅 ' + q.label + '</div>' +
-            '<div class="quest-prog">' + Math.min(q.progress || 0, q.need) + '/' + q.need + '</div></div>';
-    });
+    if (m.quests.weekly && m.quests.weekly.length) {
+        html += '<div class="quest-section-label" style="border-color:var(--gold);color:var(--gold)">Weekly</div>';
+        m.quests.weekly.forEach(q => {
+            const prog = Math.min(q.progress || 0, q.need);
+            const pct = Math.round((prog / q.need) * 100);
+            html += '<div class="quest-card2 weekly ' + (q.done ? "done" : "") + '">' +
+                '<div class="quest-card2-top">' +
+                '<span class="quest-card2-label">📅 ' + (q.done ? '✅ ' : '') + q.label + '</span>' +
+                '<span class="quest-card2-prog">' + prog + ' / ' + q.need + '</span>' +
+                '</div>' +
+                '<div class="quest-bar"><div class="quest-bar-fill weekly" style="width:' + pct + '%"></div></div>' +
+                (q.reward ? '<div class="quest-reward">+' + (q.reward.tokens || 0) + ' 🎟 +' + (q.reward.chips || 0) + ' <span class="chip-coin" aria-label="chips">C</span></div>' : '') +
+                '</div>';
+        });
+    }
     el.innerHTML = html;
 }
 
@@ -741,8 +785,10 @@ function maybeStartInvasion() {
     if (m.invasion && m.invasion.ends > Date.now()) return;
     if (m.invasionEnded && Date.now() - m.invasionEnded < 300000) return;
     if (Math.random() > 0.0008) return;
-    const maxHp = 5000 + brainrotLevel() * 200;
-    m.invasion = { hp: maxHp, max: maxHp, ends: Date.now() + 120000, dps: 0 };
+    const wave = (ensureFeatures().invasionWave || 0) + 1;
+    if (typeof ensureFeatures === "function") ensureFeatures().invasionWave = wave;
+    const maxHp = (5000 + brainrotLevel() * 200) * (1 + wave * 0.15);
+    m.invasion = { hp: maxHp, max: maxHp, ends: Date.now() + 120000, dps: 0, wave: wave };
     showToast("🚨 SKIBIDI WAVE INCOMING!", 3500);
     bigBanner("INVASION!", "#ff3030");
 }
@@ -762,7 +808,8 @@ function invasionClick(dmg) {
         if (typeof recordInvasionScore === "function") recordInvasionScore(reward);
         m.invasion = null;
         m.invasionEnded = Date.now();
-        showToast("🛡️ Invasion repelled! +" + fmt(reward), 3000);
+        const rank = typeof invasionRankTitle === "function" ? invasionRankTitle() : null;
+        showToast("🛡️ Invasion repelled! +" + fmt(reward) + (rank ? " · " + rank : ""), 3000);
         checkAchievements();
     }
     saveGame();
@@ -905,7 +952,7 @@ function exportPhotoCard() {
 
 function savePhotoHatch(pet) {
     const r = RARITY[pet.rarity] || RARITY.common;
-    window._lastHatchPhoto = { name: pet.name, emoji: pet.emoji, rarity: r.label, color: r.color };
+    window._lastHatchPhoto = { id: pet.id, name: pet.name, emoji: pet.emoji, rarity: r.label, color: r.color };
 }
 
 // ---------- HUB RENDER ----------
@@ -926,7 +973,7 @@ function showHubTab(name, btn) {
     if (typeof updateHubNavBadge === "function") updateHubNavBadge();
 }
 
-function renderHub() { showHubTab("achievements", document.querySelector("#sheet-hub .hstab")); }
+function renderHub() { showHubTab("quests", document.querySelector("#sheet-hub .hstab")); }
 
 function initMeta() {
     ensureMeta();
@@ -963,6 +1010,16 @@ function initMeta() {
         }
     }
     setInterval(() => {
+        if (typeof gardenUnlocked === "function" && gardenUnlocked()) {
+            initGardenPlots();
+            const ready = ensureMeta().garden.plots.some(p => p.seed && Date.now() >= (p.readyAt || 0));
+            if (ready && !window._gardenNotified) {
+                window._gardenNotified = true;
+                if (typeof pushNotifyStub === "function") pushNotifyStub("Garden crop ready to harvest!");
+                showToast("🌱 Garden crop ready!", 2200);
+            }
+            if (!ready) window._gardenNotified = false;
+        }
         tickStocks();
         maybeStartInvasion();
         const toilet = document.getElementById("toilet-secret");

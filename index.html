@@ -146,14 +146,14 @@
     <div class="sheet" id="sheet-hub">
         <div class="sheet-head"><h2>🧠 Brainrot Hub</h2><button class="sheet-close" onclick="closeSheet()">&times;</button></div>
         <div class="sheet-tabs hub-tabs">
-            <button class="hstab active" onclick="showHubTab('achievements', this)">🏆</button>
-            <button class="hstab" onclick="showHubTab('quests', this)">📋</button>
-            <button class="hstab" onclick="showHubTab('garden', this)">🌱</button>
-            <button class="hstab" onclick="showHubTab('stocks', this)">📈</button>
-            <button class="hstab" onclick="showHubTab('ascension', this)">☄</button>
-            <button class="hstab" onclick="showHubTab('stats', this)">📊</button>
-            <button class="hstab" onclick="showHubTab('invasion', this)">🚨</button>
-            <button class="hstab" onclick="showHubTab('season', this)">🎫</button>
+            <button class="hstab active" onclick="showHubTab('quests', this)"><span class="hstab-ico">📋</span><span class="hstab-txt">Quests</span></button>
+            <button class="hstab" onclick="showHubTab('season', this)"><span class="hstab-ico">🎫</span><span class="hstab-txt">Pass</span></button>
+            <button class="hstab" onclick="showHubTab('achievements', this)"><span class="hstab-ico">🏆</span><span class="hstab-txt">Awards</span></button>
+            <button class="hstab" onclick="showHubTab('garden', this)"><span class="hstab-ico">🌱</span><span class="hstab-txt">Garden</span></button>
+            <button class="hstab" onclick="showHubTab('stocks', this)"><span class="hstab-ico">📈</span><span class="hstab-txt">Stocks</span></button>
+            <button class="hstab" onclick="showHubTab('ascension', this)"><span class="hstab-ico">☄️</span><span class="hstab-txt">Ascend</span></button>
+            <button class="hstab" onclick="showHubTab('invasion', this)"><span class="hstab-ico">🚨</span><span class="hstab-txt">Waves</span></button>
+            <button class="hstab" onclick="showHubTab('stats', this)"><span class="hstab-ico">📊</span><span class="hstab-txt">Stats</span></button>
         </div>
         <div class="sheet-body hub-body">
             <div id="hub-achievements" class="hub-tab active"></div>
@@ -208,6 +208,15 @@
             <div class="set-group">
                 <label class="set-row"><span>🔍 UI scale</span><span id="ui-scale-val" class="set-val">100%</span></label>
                 <input type="range" id="ui-scale" min="90" max="110" value="100" class="slider" oninput="setUiScale(this.value)">
+            </div>
+            <div class="set-group toggles">
+                <button class="toggle-row" id="tg-crate-skip" onclick="toggleSetting('crateSkipAnim', this)"><span>⏭ Always skip crate anim</span><span class="toggle-pill">OFF</span></button>
+                <button class="toggle-row" id="tg-hatch-sfx" onclick="toggleSetting('hatchSfxMute', this)"><span>🔇 Mute hatch SFX</span><span class="toggle-pill">OFF</span></button>
+                <button class="toggle-row" id="tg-no-autoperf" onclick="toggleSetting('disableAutoPerf', this)"><span>🚫 Disable auto perf mode</span><span class="toggle-pill">OFF</span></button>
+            </div>
+            <div class="set-group">
+                <button class="set-action" onclick="togglePhotoMode()">📷 Photo mode</button>
+                <p id="inset-docs" class="meta-hint" style="margin-top:8px;font-size:0.7rem"></p>
             </div>
             <div class="set-group code-group">
                 <label class="set-row"><span>🎁 Codes</span><span class="set-val">Rewards</span></label>
@@ -289,5 +298,6 @@
     <script src="casino.js"></script>
     <script src="meta.js"></script>
     <script src="features.js"></script>
+    <script src="phase3.js"></script>
 </body>
 </html>

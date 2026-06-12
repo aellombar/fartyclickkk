@@ -3,7 +3,8 @@
     --orange:#FF8A3D; --gold:#FFD54A; --bg0:#08040f; --bg1:#160a2e;
     --panel:rgba(30,18,55,0.7); --stroke:rgba(177,78,255,0.35);
     --text:#f0eaff; --muted:#9b8fc7;
-    --nav-h:calc(62px + env(safe-area-inset-bottom, 0px));
+    --nav-h:calc(68px + env(safe-area-inset-bottom, 0px));
+    --footer-h:52px;
 }
 * { margin:0; padding:0; box-sizing:border-box; touch-action:manipulation; -webkit-tap-highlight-color:transparent; }
 html,body { width:100%; overflow-x:hidden; user-select:none; -webkit-user-select:none; }
@@ -43,7 +44,7 @@ body {
     max-width:520px; margin:0 auto; position:relative; z-index:1;
     min-height:calc(100dvh - env(safe-area-inset-top, 0px));
     min-height:calc(100svh - env(safe-area-inset-top, 0px));
-    padding:8px 12px calc(var(--nav-h) + 14px);
+    padding:8px 12px calc(var(--nav-h) + var(--footer-h) + 24px);
     display:flex; flex-direction:column;
 }
 #game-container.shake { animation:shakeAnim 0.45s; }
@@ -78,8 +79,8 @@ body {
 
 
 /* ---- clicker ---- */
-.clicker-zone { display:flex; flex-direction:column; align-items:center; justify-content:center; flex:1 1 auto; min-height:160px; padding:2px 0 6px; margin-top:2px; }
-.combo-wrap { width:min(70vw,280px); margin-bottom:clamp(8px, 3vw, 20px); }
+.clicker-zone { display:flex; flex-direction:column; align-items:center; justify-content:center; flex:1 1 auto; min-height:0; padding:12px 0 6px; margin-top:2px; }
+.combo-wrap { width:min(70vw,280px); margin-bottom:clamp(14px, 4vw, 28px); position:relative; z-index:2; }
 .combo-track { height:10px; background:rgba(0,0,0,0.4); border-radius:10px; overflow:hidden; border:1px solid var(--stroke); }
 #combo-bar { height:100%; width:0%; border-radius:10px; background:linear-gradient(90deg,var(--cyan),var(--pink),var(--gold)); transition:width 0.15s ease; box-shadow:0 0 12px var(--pink); }
 #combo-label { display:block; font-size:0.72rem; letter-spacing:1px; color:var(--muted); margin-top:5px; font-weight:700; }
@@ -101,8 +102,14 @@ body {
 .main-emoji { font-size:clamp(3.4rem,17vw,6rem); filter:drop-shadow(0 4px 8px rgba(0,0,0,0.4)); }
 .main-label { font-family:'Russo One',sans-serif; font-size:clamp(1.1rem,5vw,1.7rem); color:#fff; letter-spacing:3px; text-shadow:0 2px 6px rgba(0,0,0,0.55); }
 
-/* ---- rebirth ---- */
-.game-footer { flex-shrink:0; margin-top:auto; padding-top:6px; }
+/* ---- rebirth (fixed above bottom nav) ---- */
+.game-footer {
+    position:fixed; left:50%; transform:translateX(-50%); bottom:var(--nav-h); z-index:86;
+    width:100%; max-width:520px;
+    padding:0 12px 10px;
+    pointer-events:none;
+}
+.game-footer .rebirth-btn { pointer-events:auto; }
 .rebirth-btn {
     width:100%; padding:12px; border:2px solid rgba(255,213,74,0.4); border-radius:16px;
     background:linear-gradient(135deg,#2a1a4a,#1a1030); color:var(--gold);

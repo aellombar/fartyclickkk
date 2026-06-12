@@ -35,7 +35,8 @@ function freshGameState() {
             platform: null, platformChosen: false,
             performanceMode: false, reduceUiAnim: false,
             compactHud: false, rebirthExpanded: false, haptics: false,
-            particlesLite: false, uiScale: 1
+            particlesLite: false, uiScale: 1,
+            crateSkipAnim: false, hatchSfxMute: false, disableAutoPerf: false, photoMode: false
         }
     };
 }
@@ -630,6 +631,7 @@ function sfxRare(tier) {
     for (let i = 0; i <= Math.min(tier+1,5); i++) setTimeout(()=>tone(notes[i],0.25,"sine",0.10),i*100);
 }
 function sfxHatchTier(tier) {
+    if (game.settings.hatchSfxMute) return;
     if (tier <= 0) { tone(440, 0.12, "sine", 0.08); return; }
     if (tier === 1) { tone(523, 0.15, "triangle", 0.09); setTimeout(() => tone(659, 0.12, "sine", 0.07), 80); return; }
     if (tier === 2) { sfxRare(1); return; }
@@ -1608,6 +1610,10 @@ function computeOffline() {
 function claimOffline() {
     game.points += offlinePending; offlinePending = 0; offlineFactoryPending = 0;
     const m = document.getElementById("offline-modal"); if (m) m.classList.add("hidden");
+    const f = typeof ensureFeatures === "function" ? ensureFeatures() : null;
+    if (f && f.buildingManagers && Object.values(f.buildingManagers).some(Boolean)) {
+        showToast("👔 Building managers kept buying while you were away!", 2800);
+    }
     sfxBuy(); burstAt(window.innerWidth/2, window.innerHeight/2, "#7FFF00", 24); updateDisplay(); saveGame();
 }
 
@@ -1900,7 +1906,8 @@ function syncSettingsUI() {
     if (platEl) platEl.textContent = game.settings.platform === "mobile" ? "📱 Mobile" : (game.settings.platform === "desktop" ? "💻 PC" : "Not set");
     [["tg-music","musicOn"],["tg-particles","particles"],["tg-shake","screenShake"],["tg-brainrot","brainrot"],
      ["tg-perf","performanceMode"],["tg-reduce-ui","reduceUiAnim"],["tg-compact","compactHud"],
-     ["tg-haptics","haptics"],["tg-lite-particles","particlesLite"]].forEach(([id,k])=>{
+     ["tg-haptics","haptics"],["tg-lite-particles","particlesLite"],
+     ["tg-crate-skip","crateSkipAnim"],["tg-hatch-sfx","hatchSfxMute"],["tg-no-autoperf","disableAutoPerf"]].forEach(([id,k])=>{
         const b=document.getElementById(id); if(!b)return; const p=b.querySelector(".toggle-pill");
         if(p)p.innerText=game.settings[k]?"ON":"OFF"; b.classList.toggle("off",!game.settings[k]);
     });
@@ -2105,8 +2112,11 @@ function selectWorld(i) {
         grantChips(3 + i * 2, "new world unlocked");
     }
     sfxBuy(); updateDisplay(); renderWorlds(); saveGame();
-    restartWorldMusic();
+    if (typeof crossfadeWorldMusic === "function") crossfadeWorldMusic();
+    else restartWorldMusic();
     applyWorldTheme(); updateCornerGlows();
+    if (typeof applyMemeWeekVisuals === "function") applyMemeWeekVisuals();
+    if (typeof updateComboBarTheme === "function") updateComboBarTheme();
     screenFlash(w.theme && w.theme.p ? w.theme.p : "#ffd54a");
     showToast("🌍 Travelled to " + w.name + " · 🎵 " + getSong().name, 2400);
 }
@@ -2268,6 +2278,16 @@ function fusePet(name, star) {
     const need = fuseNeeded(star);
     const matches = (game.pets||[]).filter(p => p.name === name && (p.star||0) === star);
     if (matches.length < need) { sfxError(); return; }
+    if (typeof fuseLoadoutWarning === "function") {
+        const warn = fuseLoadoutWarning(matches.slice(0, need).map(p => p.id));
+        if (warn && !window._fuseLoadoutOk) {
+            showToast(warn + " — tap again to confirm", 3200);
+            window._fuseLoadoutOk = name + "|" + star;
+            return;
+        }
+        if (window._fuseLoadoutOk !== name + "|" + star) window._fuseLoadoutOk = null;
+        else window._fuseLoadoutOk = null;
+    }
     matches.sort((a,b) => b.power - a.power);
     const consumed = matches.slice(0, need);
     const ids = consumed.map(p => p.id);
@@ -2305,13 +2325,15 @@ function renderIndex() {
     chips += '</div>';
 
     const found = allPets.filter(p => game.discovered[dexKey(indexWorld, p.name)]).length;
-    const pct = Math.round((found / allPets.length) * 100);
-    let bar = '<div class="dex-progress"><div class="dex-bar" style="width:' + pct + '%"></div></div>' +
-        '<div class="dex-count">' + found + '/' + allPets.length + ' discovered · ' + pct + '%' +
+    const filterBar = typeof indexFilterBar === "function" ? indexFilterBar() : "";
+    const filteredPets = allPets.filter(p => typeof indexPassesFilter !== "function" || indexPassesFilter(p));
+    const foundF = filteredPets.filter(p => game.discovered[dexKey(indexWorld, p.name)]).length;
+    const pctF = filteredPets.length ? Math.round((foundF / filteredPets.length) * 100) : 0;
+    let bar = '<div class="dex-progress"><div class="dex-bar" style="width:' + pctF + '%"></div></div>' +
+        '<div class="dex-count">' + foundF + '/' + filteredPets.length + ' shown · ' + pctF + '%' +
         (found === allPets.length ? ' · ✅ COMPLETE (+3% global!)' : '') + '</div>';
-
     let grid = '<div class="dex-grid">';
-    allPets.forEach(p => {
+    filteredPets.forEach(p => {
         const r = RARITY[p.rarity] || RARITY.common;
         const got = game.discovered[dexKey(indexWorld, p.name)];
         const pw = petPower(p.base, indexWorld);
@@ -2322,11 +2344,10 @@ function renderIndex() {
             '<span class="dex-pow">' + (got?pw.toFixed(2)+"x":"—") + '</span></div>';
     });
     grid += '</div>';
-
     const dexBonusPct = Math.round((dexBonus()-1)*100);
     const footer = '<div class="dex-footer">🏆 Dex Bonus: <b>+' + dexBonusPct + '% to all income</b> (' + completedWorlds() + ' worlds completed)</div>';
     const el = document.getElementById("pets-body");
-    if (el) el.innerHTML = chips + bar + grid + footer;
+    if (el) el.innerHTML = chips + filterBar + bar + grid + footer;
 }
 function setIndexWorld(i) { indexWorld = i; renderIndex(); }
 
@@ -2598,6 +2619,10 @@ function rollEggMulti(idx, count) {
     playHatch(results[0].pet, results[0].egg);
 }
 function pickFromEgg(egg) {
+    if (typeof applyPityBias === "function") {
+        const pityPick = applyPityBias(egg);
+        if (pityPick) return pityPick;
+    }
     if (typeof currentMemePet === "function" && Math.random() < 0.035) {
         const meme = currentMemePet();
         const w = game.worldIdx || 0;
@@ -2672,7 +2697,7 @@ function playHatchTurbo(pet, egg) {
         if (tier >= 2) { screenFlash(r.color); shockwave(r.color); }
         if (tier >= 4) shake();
         sfxHatchTier(tier);
-        if (tier >= 1) spawnConfetti(r.color, 6 + tier * 3);
+        if (tier >= 3) spawnConfetti(r.color, 6 + tier * 3);
 
         hatchDelay(() => {
             setIconNode(eggEl, pet.emoji, "hatch-pet-img", pet.name);
@@ -2823,14 +2848,14 @@ function playHatch(pet, egg) {
 
         shockwave(r.color);
         hatchBurstFX(r.color, tier, pet.emoji || egg.emoji);
-        spawnConfetti(r.color, 25 + tier * 45);
+        if (tier >= 3) spawnConfetti(r.color, 25 + tier * 45);
         sfxHatchTier(tier);
 
         if (tier >= 1) screenFlash(r.color);
         if (tier >= 2) {
             lightBurst(r.color);
             hatchDelay(() => shockwave(r.color), 150);
-            spawnConfetti(r.color, 40);
+            if (tier >= 3) spawnConfetti(r.color, 40);
         }
         if (tier >= 3) {
             shake();
@@ -3246,7 +3271,9 @@ function updateDisplay() {
         else ascBadge.classList.add("hidden");
     }
     if (typeof renderInvasionHud === "function") renderInvasionHud();
-    if (typeof updateCompactHudLine === "function") updateCompactHudLine();
+    if (typeof updateCompactHudLineP3 === "function") updateCompactHudLineP3();
+    else if (typeof updateCompactHudLine === "function") updateCompactHudLine();
+    if (typeof updateComboBarTheme === "function") updateComboBarTheme();
     if (typeof updateHubNavBadge === "function") updateHubNavBadge();
     if (typeof renderShowcasePet === "function") renderShowcasePet();
     const rb = byId("rebirth-btn");
@@ -3317,6 +3344,7 @@ function initGame() {
     addCornerGlows();
     if (typeof initMeta === "function") initMeta();
     if (typeof initFeatures === "function") initFeatures();
+    if (typeof initPhase3 === "function") initPhase3();
     if (typeof updateHubNavBadge === "function") updateHubNavBadge();
     maybeShowPlatformPicker();
 }
@@ -3353,6 +3381,7 @@ function updateCornerGlows() {
 function spawnAmbOrb() {
     const pm = typeof particleMode === "function" ? particleMode() : "full";
     if (!pageVisible || pm === "off" || isPerformanceMode() || fxNodeCount >= fxSoftLimit()) return;
+    if (typeof trackAmbOrbSpawn === "function" && !trackAmbOrbSpawn()) return;
     if (pm === "lite" && Math.random() > 0.35) return;
     const colors = getWorldColors();
     const el = document.createElement("div");
@@ -3368,7 +3397,9 @@ function spawnAmbOrb() {
     el.style.setProperty("--dy", (Math.random() * 120 - 60) + "px");
     el.style.setProperty("--dx2", (Math.random() * 200 - 100) + "px");
     el.style.setProperty("--dy2", (Math.random() * 200 - 100) + "px");
-    appendFxNode(document.body, el, dur * 1000);
+    const ms = dur * 1000;
+    appendFxNode(document.body, el, ms);
+    if (typeof ambOrbRemoved === "function") setTimeout(ambOrbRemoved, ms);
 }
 
 // Shooting streaks flying across the screen
