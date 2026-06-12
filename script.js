@@ -2457,6 +2457,9 @@ setInterval(() => saveGame(true), 5000);
 
 function initGame() {
     loadGame();
+    if (typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches) {
+        game.settings.particles = false;
+    }
     hatchActive = false;
     hatchMultiSession = false;
     hatchQueue = [];
@@ -2634,9 +2637,6 @@ function buildButtonDecor() {
 document.addEventListener("visibilitychange", () => {
     pageVisible = !document.hidden;
 });
-if (typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches) {
-    game.settings.particles = false;
-}
 if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", initGame);
 else initGame();
 
