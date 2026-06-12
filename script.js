@@ -21,6 +21,12 @@ function freshGameState() {
         auraUpgrades: {},
         discovered: {},
         redeemedCodes: {},
+        adminMode: false,
+        chips: 0,
+        peakWorldIdx: 0,
+        casino: null,
+        meta: null,
+        ascension: 0,
         lastSeen: Date.now(),
         settings: {
             musicVol: 0.35, sfxVol: 0.70,
@@ -125,7 +131,8 @@ const WORLDS = [
     { name: "Galactic Core",    reqRebirths: 870,  icon: "🌌", theme: { p:"#ffd54a", s:"#b14eff", a:"#00e0ff", bg1:"#0a0428", bg2:"#040214" } },
     { name: "Time Rift",        reqRebirths: 1050, icon: "⏳", theme: { p:"#ffe080", s:"#40ffd0", a:"#ff3d9a", bg1:"#2a200a", bg2:"#141004" } },
     { name: "Gigachad Nexus",   reqRebirths: 1260, icon: "💪", theme: { p:"#ff1050", s:"#ffd54a", a:"#00e0ff", bg1:"#2a0820", bg2:"#140410" } },
-    { name: "The Final Stench", reqRebirths: 1500, icon: "👑", theme: { p:"#ffd700", s:"#ff00ff", a:"#00ffd0", bg1:"#1a001a", bg2:"#0a000a" } }
+    { name: "The Final Stench", reqRebirths: 1500, icon: "👑", theme: { p:"#ffd700", s:"#ff00ff", a:"#00ffd0", bg1:"#1a001a", bg2:"#0a000a" } },
+    { name: "The Void Between", reqRebirths: 99999, icon: "🌀", secret: true, theme: { p:"#00ffd0", s:"#b14eff", a:"#ffffff", bg1:"#000818", bg2:"#000004" } }
 ];
 
 // ---------- Number format (NaN-safe) ----------
@@ -185,7 +192,7 @@ function applyChromeIcons() {
     if (main) main.outerHTML = iconHTML("💨", "main-icon-img", "Click");
     const offline = document.querySelector(".offline-icon-img");
     if (offline) offline.outerHTML = iconHTML("💨", "offline-icon-img", "Offline stink");
-    [["upgrades","🛒"],["pets","🐾"],["worlds","🌍"],["aura","✦"]].forEach(([sheet, emoji]) => {
+    [["upgrades","🛒"],["pets","🐾"],["casino","💎"],["hub","🧠"],["worlds","🌍"],["aura","✦"]].forEach(([sheet, emoji]) => {
         const wrap = document.querySelector('.nav-btn[data-sheet="' + sheet + '"] .nav-ico');
         if (wrap) wrap.innerHTML = iconHTML(emoji, "nav-icon-img", sheet);
     });
@@ -239,6 +246,38 @@ const UPGRADES = [
     { name: "Omega Stench Engine",baseCost: 340000000000000000,passivePower:42000000000000,type:"passive",icon: "👑" }
 ];
 
+const UPGRADE_GROWTH = 1.28;
+(function appendLateUpgrades() {
+    const clickExt = [
+        ["Mogger Mist","🌫️"],["NPC Blaster","🤖"],["Drip Cannon","💅"],["Gyatt Laser","🍑"],["Ohio Railgun","🌽"],
+        ["Skibidi Reactor","🚽"],["Sigma Beam","😤"],["Grimace Core","🟣"],["Mewing Engine","😐"],["Rizz Laser","😎"],
+        ["Fanum Siphon","🍔"],["Toxic Surge","☣️"],["Void Punch","🕳️"],["Quantum Tap","⚛️"],["Neon Striker","🌟"],
+        ["Crystal Jab","💎"],["Inferno Fist","🔥"],["Galaxy Smack","🌌"],["Time Ripper","⏳"],["Final Click","👑"],
+        ["Ultra Mogger","💪"],["Brainrot Beam","🧠"],["NPC Eraser","🧟"],["Ohio Finisher","🏆"],["Skibidi Ult","🌀"],
+        ["Sigma Finisher","🗿"],["Gyatt Nova","✨"],["Stench God","💨"],["Rizz Apocalypse","💞"],["Omega Tap","♾️"],["THE CLICK","🔱"]
+    ];
+    const passExt = [
+        ["Stink Drip","💧"],["Mold Farm","🍄"],["Vent Stack","🏭"],["Tornado Bank","🌪️"],["Reactor Hum","⚡"],
+        ["Black Hole ATM","🕳️"],["Galaxy Mint","🌌"],["Quantum Printer","💻"],["Neon Pipeline","🌟"],["Crystal Refinery","💎"],
+        ["Inferno Forge","🔥"],["Mirror Pump","🪞"],["Time Printer","⏳"],["Gigachad Reactor","🏋️"],["Final Mint","👑"],
+        ["Ultra Vent","🌬️"],["Brainrot Reactor","🧠"],["Ohio Generator","🌽"],["Skibidi Plant","🚽"],["Sigma Engine","😤"],
+        ["Grimace Pump","🟣"],["Mewing Turbine","☁️"],["Void Siphon","🛸"],["Cosmic Hose","📡"],["Dimension Tap","🔄"],
+        ["Aura Forge","🔯"],["Stench Infinity","♾️"],["NPC Farm","🤖"],["Gyatt Generator","🍑"],["Omega Pump","💥"],["THE PASSIVE","🔱"]
+    ];
+    let cCost = 6e20, cPow = 8e10;
+    clickExt.forEach((pair, i) => {
+        UPGRADES.push({ name: pair[0], baseCost: Math.floor(cCost), clickPower: Math.floor(cPow), type: "click", icon: pair[1],
+            reqWorld: 2 + Math.floor(i / 2), reqRebirths: Math.floor(i / 3) });
+        cCost *= 5.5; cPow *= 3.8;
+    });
+    let pCost = 4e20, pPow = 5e9;
+    passExt.forEach((pair, i) => {
+        UPGRADES.push({ name: pair[0], baseCost: Math.floor(pCost), passivePower: Math.floor(pPow), type: "passive", icon: pair[1],
+            reqWorld: 2 + Math.floor(i / 2), reqRebirths: Math.floor(i / 3) });
+        pCost *= 5.8; pPow *= 4.0;
+    });
+})();
+
 const PET_SLOTS = [
     { slot: 4,  cost: 5000000,            reqRebirths: 1 },
     { slot: 5,  cost: 400000000,          reqRebirths: 3 },
@@ -271,7 +310,9 @@ const RARITY = {
     epic:      { label: "Epic",      color: "#b14eff", tier: 2 },
     legendary: { label: "Legendary", color: "#ffd54a", tier: 3 },
     mythic:    { label: "MYTHIC",    color: "#ff3d9a", tier: 4 },
-    secret:    { label: "✦ SECRET ✦",color: "#00ffd0", tier: 5 }
+    secret:    { label: "✦ SECRET ✦",color: "#00ffd0", tier: 5 },
+    ultra:     { label: "⚡ ULTRA ⚡", color: "#ff6b00", tier: 6 },
+    divine:    { label: "☄ DIVINE ☄", color: "#ffffff", tier: 7 }
 };
 
 // ---------- Per-world egg sets — each world has 3 unique eggs with unique pets ----------
@@ -413,26 +454,111 @@ WORLD_PET_THEMES.forEach((t, i) => {
     ];
 });
 
+// ---------- Per-world ULTRA (tier6) + DIVINE (tier7) pets — rarer than secret ----------
+// Rarity ladder per world: ... mythic < secret < ultra < divine
+const WORLD_APEX_PETS = [
+    { ultra:["Basement Phantom","🕳️"],   divine:["The Ancient Stink","👑"] },     // 0
+    { ultra:["Sewer Leviathan","🐉"],     divine:["Sewer Deity","🐲"] },           // 1
+    { ultra:["Skibidi Titan","🚽"],       divine:["Skibidi Overgod","🔱"] },       // 2
+    { ultra:["Rizz Emperor","😎"],        divine:["Rizz Deity","💞"] },            // 3
+    { ultra:["Ohio Anomaly","🌽"],        divine:["Ohio Eldritch God","👁️"] },     // 4
+    { ultra:["Cosmic Devourer","🌌"],     divine:["Universe Eater","🌠"] },        // 5
+    { ultra:["Canyon Behemoth","🏔️"],     divine:["Canyon God-King","⛰️"] },       // 6
+    { ultra:["Hellfire Sovereign","👹"],  divine:["Lord of Cinders","😈"] },       // 7
+    { ultra:["Sigma Overlord","🗿"],      divine:["The Sigma Prime","♾️"] },        // 8
+    { ultra:["Void Sovereign","🛸"],      divine:["Reality Architect","🌀"] },     // 9
+    { ultra:["Quantum Singularity","⚛️"], divine:["The Final Particle","💫"] },     // 10
+    { ultra:["Grimace Overlord","🟣"],    divine:["Grimace Prime","🔮"] },         // 11
+    { ultra:["Cloud Sovereign","☁️"],     divine:["Ascended Mewer","🕊️"] },        // 12
+    { ultra:["Inferno Tyrant","🔥"],      divine:["Eternal Inferno","💀"] },       // 13
+    { ultra:["Crystal Monarch","💎"],     divine:["Diamond Godhead","🔱"] },       // 14
+    { ultra:["Mirror Sovereign","🪞"],    divine:["The True Reflection","✨"] },    // 15
+    { ultra:["Galactic Emperor","🌌"],    divine:["Heart of the Cosmos","⭐"] },    // 16
+    { ultra:["Chrono Sovereign","⏳"],    divine:["Master of Eternity","🕰️"] },    // 17
+    { ultra:["Gigachad Titan","💪"],      divine:["THE OMEGA CHAD","🏆"] },        // 18
+    { ultra:["Stench Overlord","👑"],     divine:["THE FINAL STENCH GOD","♾️"] },   // 19
+];
+(function appendApexPets() {
+    for (let w = 0; w < WORLD_EGGS.length; w++) {
+        const eggs = WORLD_EGGS[w];
+        if (!eggs || !eggs.length) continue;
+        const apex = WORLD_APEX_PETS[w] || WORLD_APEX_PETS[0];
+        const legendaryEgg = eggs[eggs.length - 1];
+        if (!legendaryEgg || !legendaryEgg.pets) continue;
+        // scale base off the egg's strongest pet so apex pets are clearly best
+        const topBase = legendaryEgg.pets.reduce((m, p) => Math.max(m, p.base || 0), 1);
+        if (!legendaryEgg.pets.some(p => p.rarity === "ultra")) {
+            legendaryEgg.pets.push({ name: apex.ultra[0], emoji: apex.ultra[1], base: topBase * 2.2, odds: 0.18, rarity: "ultra" });
+        }
+        if (!legendaryEgg.pets.some(p => p.rarity === "divine")) {
+            legendaryEgg.pets.push({ name: apex.divine[0], emoji: apex.divine[1], base: topBase * 5.0, odds: 0.025, rarity: "divine" });
+        }
+    }
+})();
+
+// Top-tier pet template for a world (for casino jackpots / wheel)
+function worldApexTemplate(worldIdx, wantDivine) {
+    const w = Math.max(0, Math.min(WORLD_APEX_PETS.length - 1, worldIdx || 0));
+    const apex = WORLD_APEX_PETS[w];
+    const eggs = WORLD_EGGS[w] || WORLD_EGGS[0];
+    const legendaryEgg = eggs[eggs.length - 1];
+    const topBase = legendaryEgg.pets.reduce((m, p) => Math.max(m, p.base || 0), 1);
+    if (wantDivine) return { name: apex.divine[0], emoji: apex.divine[1], rarity: "divine", base: topBase * 5.0 };
+    return { name: apex.ultra[0], emoji: apex.ultra[1], rarity: "ultra", base: topBase * 2.2 };
+}
+
 // Current world's egg templates
 function getEggTemplates() { return WORLD_EGGS[game.worldIdx] || WORLD_EGGS[0]; }
 
 function eggCost(t, world) {
     const w = Math.max(0, world || 0);
-    const base = t.baseCost * Math.pow(t.growth, w);
+    const base = t.baseCost * Math.pow(t.growth + 0.08, w);
     const unlockReq = (WORLDS[w] && WORLDS[w].reqRebirths) || 0;
-    const unlockPressure = 1 + unlockReq / 20;
-    const lateWorldPressure = Math.pow(1.55, (w * w) / 9);
-    const tierPressure = t.id === "legendary" ? (1 + w * 0.35) : (t.id === "rare" ? (1 + w * 0.18) : 1);
-    return Math.floor(base * unlockPressure * lateWorldPressure * tierPressure);
+    const unlockPressure = 1 + unlockReq / 12;
+    const lateWorldPressure = Math.pow(1.72, (w * w) / 8);
+    const tierPressure = t.id === "legendary" ? (1 + w * 0.55) : (t.id === "rare" ? (1 + w * 0.28) : (1 + w * 0.08));
+    const slope = Math.pow(1.09, w);
+    let cost = Math.floor(base * unlockPressure * lateWorldPressure * tierPressure * slope);
+    const disc = typeof casinoEggDiscount === "function" ? casinoEggDiscount() : 0;
+    if (disc > 0) cost = Math.floor(cost * (1 - disc));
+    if (typeof ascensionMutatorMult === "function") cost = Math.floor(cost * ascensionMutatorMult("eggCost"));
+    return cost;
 }
-// pet power: flatter base values, gentler world scaling
-function petPower(base, world) { return +(Math.sqrt(base) * Math.pow(1.15, world)).toFixed(2); }
+function petPower(base, world) {
+    return +(Math.pow(base, 0.42) * Math.pow(1.11, world)).toFixed(2);
+}
+function scaleEggPets(egg) {
+    const w = game.worldIdx || 0;
+    const pressure = Math.pow(1.16, w);
+    const scaled = egg.pets.map(p => {
+        const tier = (RARITY[p.rarity] || RARITY.common).tier;
+        let odds = p.odds;
+        if (tier >= 7) odds = Math.max(0.01, odds / (pressure * 8));
+        else if (tier >= 6) odds = Math.max(0.03, odds / (pressure * 6));
+        else if (tier >= 5) odds = Math.max(0.05, odds / (pressure * 4.5));
+        else if (tier >= 4) odds = Math.max(0.15, odds / (pressure * 2.8));
+        else if (tier >= 3) odds = Math.max(0.8, odds / (pressure * 1.6));
+        else if (tier >= 2) odds = Math.max(4, odds / (pressure * 1.2));
+        return Object.assign({}, p, { odds: odds });
+    });
+    const sum = scaled.reduce((s, p) => s + p.odds, 0);
+    return scaled.map(p => Object.assign({}, p, { odds: +(p.odds * 100 / sum).toFixed(3) }));
+}
 function rollBestFromEgg(egg) {
-    const tries = 1 + Math.min(auraLevel("luck"), 5);
+    let tries = 1 + Math.min(auraLevel("luck"), 4);
+    if (typeof metaBonus === "function") tries += Math.floor(metaBonus("luck") * 25);
+    if (typeof jobBonuses === "function") tries += Math.floor((jobBonuses().luck || 0) * 12);
     let chosen = pickFromEgg(egg);
     for (let k = 1; k < tries; k++) {
         const c = pickFromEgg(egg);
-        if (RARITY[c.rarity].tier > RARITY[chosen.rarity].tier) chosen = c;
+        if ((RARITY[c.rarity] || RARITY.common).tier > (RARITY[chosen.rarity] || RARITY.common).tier) chosen = c;
+    }
+    if (typeof ascensionMutatorMult === "function" && ascensionMutatorMult("luck") > 1) {
+        const tier = (RARITY[chosen.rarity] || RARITY.common).tier;
+        if (tier >= 5 && Math.random() < 0.35) {
+            const c = pickFromEgg(egg);
+            if ((RARITY[c.rarity] || RARITY.common).tier >= tier) chosen = c;
+        }
     }
     return chosen;
 }
@@ -894,15 +1020,26 @@ const WORLD_SONGS = [
 
 // ---------- Section structure (bars per section, repeating song form) ----------
 // Form: intro(4) → verse(8) → chorus(8) → verse(8) → bridge(4) → chorus(8) → outro(4) = 44 bars ~3min
-const SONG_FORM = [
-    { section: 0, bars: 4  },  // intro  (sparse melody 0)
-    { section: 1, bars: 8  },  // verse  (melody 1, light drums)
-    { section: 2, bars: 8  },  // chorus (melody 2, full drums)
-    { section: 1, bars: 8  },  // verse2 (melody 1)
-    { section: 3, bars: 4  },  // bridge (melody 3, minimal drums)
-    { section: 2, bars: 8  },  // chorus2(melody 2, full drums)
-    { section: 0, bars: 4  },  // outro  (melody 0, fade)
-]; // total 44 bars, then loops
+// Multiple song structures so worlds don't all feel identical
+const SONG_FORMS = [
+    // 0 — classic pop (intro/verse/chorus)
+    [ {section:0,bars:4},{section:1,bars:8},{section:2,bars:8},{section:1,bars:8},{section:3,bars:4},{section:2,bars:8},{section:0,bars:4} ],
+    // 1 — chorus-heavy banger
+    [ {section:2,bars:4},{section:1,bars:4},{section:2,bars:8},{section:3,bars:4},{section:2,bars:8},{section:2,bars:4} ],
+    // 2 — ambient slow burn
+    [ {section:0,bars:8},{section:3,bars:8},{section:1,bars:8},{section:0,bars:8},{section:1,bars:8} ],
+    // 3 — call & response
+    [ {section:1,bars:4},{section:2,bars:4},{section:1,bars:4},{section:2,bars:4},{section:3,bars:4},{section:0,bars:4},{section:2,bars:8} ],
+    // 4 — relentless (final worlds)
+    [ {section:2,bars:8},{section:2,bars:4},{section:1,bars:4},{section:2,bars:8},{section:2,bars:4} ],
+];
+function activeSongForm() {
+    const set = WORLD_TRACK_SETS[game.worldIdx % WORLD_TRACK_SETS.length] || WORLD_TRACK_SETS[0];
+    const track = set[PHONK.trackIdx % 3] || set[0];
+    return SONG_FORMS[track.formIdx || 0];
+}
+function songFormBars(form) { return form.reduce((s, x) => s + x.bars, 0); }
+const SONG_FORM = SONG_FORMS[0]; // legacy fallback
 
 const WORLD_TRACK_NAMES = [
     ["Basement Dreams", "Moldy Lullaby", "Pipe Drip Echo"],
@@ -946,22 +1083,97 @@ const DRUM_VARIANTS = [
     { kicks: [1,0,0,1,0,0,1,0,1,0,0,1,0,0,1,0], hats: [1,0,1,0,1,1,0,1,1,0,1,0,1,1,0,1] },
     { kicks: [1,0,0,0,0,0,0,0,1,0,0,0,0,0,1,0], hats: [0,0,1,0,0,0,1,0,0,0,1,0,0,0,0,1] }
 ];
+// World music archetypes — each world-range has a distinct feel
+const WORLD_ARCHETYPES = [
+    // [bpm range, voice triple, drum density, filter, reverb, bass style]
+    { bpmBase: 65,  bpmRange: 8,  drums: 0, filter: 600,  rev: 0.55, bass: "soft"  }, // 0  Basement   — lo-fi slow
+    { bpmBase: 84,  bpmRange: 10, drums: 1, filter: 1400, rev: 0.30, bass: "groove" }, // 1  Sewer      — funky groove
+    { bpmBase: 96,  bpmRange: 8,  drums: 2, filter: 2200, rev: 0.20, bass: "808"   }, // 2  Skibidi    — upbeat phonk
+    { bpmBase: 80,  bpmRange: 12, drums: 1, filter: 1800, rev: 0.40, bass: "groove" }, // 3  Rizz Dojo  — chill R&B
+    { bpmBase: 72,  bpmRange: 10, drums: 0, filter: 1000, rev: 0.60, bass: "soft"  }, // 4  Ohio       — creepy folk
+    { bpmBase: 90,  bpmRange: 14, drums: 2, filter: 3000, rev: 0.15, bass: "808"   }, // 5  Outer Space — hard trap
+    { bpmBase: 76,  bpmRange: 8,  drums: 1, filter: 1600, rev: 0.35, bass: "groove" }, // 6  Gyatt Canyon
+    { bpmBase: 102, bpmRange: 10, drums: 2, filter: 2800, rev: 0.10, bass: "808"   }, // 7  Nether     — heavy metal-ish
+    { bpmBase: 95,  bpmRange: 12, drums: 1, filter: 2400, rev: 0.20, bass: "808"   }, // 8  Sigma City  — techno
+    { bpmBase: 68,  bpmRange: 16, drums: 0, filter: 800,  rev: 0.70, bass: "soft"  }, // 9  Dimension X — alien ambient
+    { bpmBase: 88,  bpmRange: 10, drums: 2, filter: 2600, rev: 0.18, bass: "808"   }, // 10 Quantum
+    { bpmBase: 100, bpmRange: 8,  drums: 2, filter: 3200, rev: 0.12, bass: "808"   }, // 11 Grimace
+    { bpmBase: 60,  bpmRange: 8,  drums: 0, filter: 700,  rev: 0.75, bass: "soft"  }, // 12 Mewing Heights — ethereal
+    { bpmBase: 108, bpmRange: 10, drums: 2, filter: 3500, rev: 0.08, bass: "808"   }, // 13 Inferno
+    { bpmBase: 72,  bpmRange: 12, drums: 1, filter: 1200, rev: 0.50, bass: "groove" }, // 14 Crystal
+    { bpmBase: 78,  bpmRange: 10, drums: 1, filter: 1400, rev: 0.40, bass: "groove" }, // 15 Mirror
+    { bpmBase: 85,  bpmRange: 14, drums: 2, filter: 2800, rev: 0.20, bass: "808"   }, // 16 Galactic
+    { bpmBase: 92,  bpmRange: 8,  drums: 2, filter: 3000, rev: 0.15, bass: "808"   }, // 17 Time Rift
+    { bpmBase: 112, bpmRange: 8,  drums: 2, filter: 3800, rev: 0.05, bass: "808"   }, // 18 Gigachad
+    { bpmBase: 120, bpmRange: 4,  drums: 2, filter: 4500, rev: 0.02, bass: "808"   }, // 19 Final Stench
+];
+const WORLD_VOICE_TRIPLES = [
+    ["pad","pluck","pulse"],       // 0  soft ambient
+    ["marimba","organ","bass808"], // 1  funky
+    ["ep","pulse","bass808"],      // 2  phonk
+    ["chime","strings","flute"],   // 3  R&B
+    ["marimba","pluck","bell"],    // 4  folk
+    ["pad","strings","bell"],      // 5  space
+    ["pluck","brass","marimba"],   // 6  canyon
+    ["organ","bass808","pulse"],   // 7  heavy
+    ["ep","bass808","pulse"],      // 8  techno
+    ["pad","flute","chime"],       // 9  alien
+    ["ep","bell","strings"],       // 10 quantum
+    ["organ","pulse","bass808"],   // 11 grimace
+    ["pad","flute","chime"],       // 12 clouds
+    ["brass","bass808","pulse"],   // 13 inferno
+    ["chime","bell","pluck"],      // 14 crystal
+    ["ep","strings","flute"],      // 15 mirror
+    ["pad","strings","brass"],     // 16 galactic
+    ["chime","pluck","organ"],     // 17 time
+    ["bass808","brass","pulse"],   // 18 gigachad
+    ["marimba","strings","brass"], // 19 final
+];
+function transposeMelodies(melodies, semitones) {
+    const st = semitones || 0;
+    return melodies.map(row => row.map(n => (n === null || n === undefined) ? n : n + st));
+}
 function buildWorldTrackSets() {
     const sets = [];
     for (let w = 0; w < 20; w++) {
+        const arc = WORLD_ARCHETYPES[w] || WORLD_ARCHETYPES[0];
+        const voices = WORLD_VOICE_TRIPLES[w] || WORLD_VOICE_TRIPLES[0];
         const tracks = [];
         for (let t = 0; t < 3; t++) {
-            const src = WORLD_SONGS[(w + t * 7) % WORLD_SONGS.length];
-            const drums = DRUM_VARIANTS[t];
+            // Each track in a world picks a *different* source song guaranteed
+            const srcIdx = (w + t * 7) % WORLD_SONGS.length;
+            const src = WORLD_SONGS[srcIdx];
+            const drums = DRUM_VARIANTS[(arc.drums + t) % DRUM_VARIANTS.length];
+            // BPM: base + per-track variation (+0, +6, -4 = slow/med/fast)
+            const bpmOffsets = [0, 6, -4];
+            const bpm = Math.max(55, Math.min(130, arc.bpmBase + (w % arc.bpmRange) + bpmOffsets[t]));
+            // Key: each track in world uses a genuinely different key centre
+            const keyOffsets = [0, 5, 9]; // tonic, subdominant, relative
+            const key = src.key + keyOffsets[t] + Math.floor(w / 4) * 2;
+            // Melody density: higher worlds have denser melodies
+            const density = Math.min(1 + w * 0.06, 2.5);
+            // Filter opens up in later worlds
+            const filter = arc.filter + t * 200 + w * 15;
+            // form: ambient worlds use slow-burn, fast worlds use banger/relentless
+            let formIdx;
+            if (arc.drums === 0) formIdx = 2;            // ambient
+            else if (arc.bpmBase >= 100) formIdx = 4;    // relentless
+            else if (arc.bpmBase >= 88) formIdx = 1;     // banger
+            else formIdx = (w + t) % 2 === 0 ? 0 : 3;    // pop / call-response
             tracks.push({
                 name: WORLD_TRACK_NAMES[w][t],
-                bpm: WORLD_BPM_TRIPLES[w][t],
-                key: src.key + (t * 2 - 2),
-                voice: WORLD_VOICE_POOLS[w][t],
+                bpm,
+                key,
+                voice: voices[t],
                 progs: src.progs,
-                melodies: src.melodies,
+                melodies: transposeMelodies(src.melodies, keyOffsets[t]),
                 kicks: drums.kicks,
-                hats: drums.hats
+                hats: drums.hats,
+                worldFilter: Math.min(filter, 5000),
+                density,
+                reverb: arc.rev,
+                bassStyle: arc.bass,
+                formIdx,
             });
         }
         sets.push(tracks);
@@ -978,13 +1190,15 @@ function getSong() {
 }
 
 function currentSection() {
-    let bar = PHONK.bars % 44;
+    const form = activeSongForm();
+    const total = songFormBars(form);
+    let bar = PHONK.bars % total;
     let acc = 0;
-    for (let i = 0; i < SONG_FORM.length; i++) {
-        acc += SONG_FORM[i].bars;
-        if (bar < acc) return SONG_FORM[i];
+    for (let i = 0; i < form.length; i++) {
+        acc += form[i].bars;
+        if (bar < acc) return form[i];
     }
-    return SONG_FORM[0];
+    return form[0];
 }
 
 function phonkTick() {
@@ -1003,7 +1217,7 @@ function phonkTick() {
     // pad chord every bar start
     if (s === 0) {
         const master = ensureMaster(); if (master) {
-            const f = ctx.createBiquadFilter(); f.type = "lowpass"; f.frequency.value = 1900; f.Q.value = 0.5;
+            const f = ctx.createBiquadFilter(); f.type = "lowpass"; f.frequency.value = song.worldFilter || 1900; f.Q.value = 0.5;
             const g = ctx.createGain();
             g.gain.setValueAtTime(0.0001, t);
             g.gain.linearRampToValueAtTime(0.028 * game.settings.musicVol, t + 0.9);
@@ -1034,14 +1248,45 @@ function phonkTick() {
         if (master) playVoice(ctx, t, song.voice, freq, vol, master);
     }
 
-    // bass on beat 1 and 3 of bar
+    // bass on beat 1 and 3 of bar — style varies by archetype
     if (s === 0 || s === 8) {
-        const master = ensureMaster(); if (master)
-            vBass(ctx, t, midiHz(root - 12), 0.28 * drumVol, master);
+        const master = ensureMaster(); if (master) {
+            const bassFreq = midiHz(root - 12);
+            const bassVol = 0.30 * drumVol;
+            if (song.bassStyle === "808") vBass808(ctx, t, bassFreq, bassVol, master);
+            else if (song.bassStyle === "groove") {
+                vBass(ctx, t, bassFreq, bassVol, master);
+                if (s === 8) vBass(ctx, t + (60 / song.bpm / 2), midiHz(root - 12 + 2), bassVol * 0.7, master);
+            } else {
+                vBass(ctx, t, bassFreq, bassVol * 0.75, master);
+            }
+        }
+    }
+
+    // Extra melody layer for denser worlds
+    const density = song.density || 1;
+    if (density > 1.5 && s % 4 === 2) {
+        const master = ensureMaster();
+        if (master) {
+            const mel2 = song.melodies[1] || song.melodies[0];
+            const note2 = mel2[(s + 2) % 16];
+            if (note2 !== null && note2 !== undefined) {
+                const secondVoice = song.voice === "pad" ? "pluck" : (song.voice === "marimba" ? "chime" : "pluck");
+                playVoice(ctx, t, secondVoice, midiHz(note2 + root + 12), 0.055 * game.settings.musicVol * (density - 1), master);
+            }
+        }
     }
 
     PHONK.step++;
-    if (PHONK.step % 16 === 0) PHONK.bars++;
+    if (PHONK.step % 16 === 0) {
+        PHONK.bars++;
+        const formLen = songFormBars(activeSongForm());
+        if (PHONK.bars > 0 && PHONK.bars % formLen === 0) {
+            PHONK.trackIdx = (PHONK.trackIdx + 1) % 3;
+            PHONK.step = 0; PHONK.bars = 0;
+            announceTrack();
+        }
+    }
 }
 
 function worldKey() { return getSong().key; }
@@ -1150,30 +1395,74 @@ function dexBonus() { return 1 + completedWorlds() * 0.03; } // +3% per fully-de
 
 function getClickPower() {
     let p = game.baseClickPower || 1;
-    UPGRADES.forEach((u, i) => { if (u.type === "click" && game.upgrades[i]) p += (u.clickPower||0) * game.upgrades[i]; });
-    return p * rebirthBonus() * auraMult("click") * dexBonus();
+    UPGRADES.forEach((u, i) => {
+        if (u.type === "click" && game.upgrades[i] && upgradeUnlocked(u)) p += (u.clickPower || 0) * game.upgrades[i];
+    });
+    let mult = rebirthBonus() * auraMult("click") * dexBonus();
+    if (typeof metaBonus === "function") mult *= 1 + metaBonus("stink");
+    if (typeof ascensionMutatorMult === "function") mult *= ascensionMutatorMult("click") * ascensionMutatorMult("all");
+    return p * mult;
 }
 function getPassive() {
     let p = 0;
-    UPGRADES.forEach((u, i) => { if (u.type === "passive" && game.upgrades[i]) p += (u.passivePower||0) * game.upgrades[i]; });
-    return p * rebirthBonus() * auraMult("passive") * dexBonus();
+    UPGRADES.forEach((u, i) => {
+        if (u.type === "passive" && game.upgrades[i] && upgradeUnlocked(u)) p += (u.passivePower || 0) * game.upgrades[i];
+    });
+    if (typeof buildingProduction === "function") p += buildingProduction();
+    p *= (typeof casinoPassiveMult === "function" ? casinoPassiveMult() : 1);
+    let mult = rebirthBonus() * auraMult("passive") * dexBonus();
+    if (typeof jobBonuses === "function") mult *= 1 + (jobBonuses().passive || 0);
+    if (typeof ascensionMutatorMult === "function") mult *= ascensionMutatorMult("passive") * ascensionMutatorMult("all");
+    return p * mult;
+}
+function upgradeUnlocked(u) {
+    return (game.worldIdx || 0) >= (u.reqWorld || 0) && (game.rebirths || 0) >= (u.reqRebirths || 0);
 }
 function getPetMult() {
-    // additive stacking so 3 pets don't multiply into insane numbers
     let m = 1;
-    (game.equippedPets || []).forEach(p => { m += (p.power || 1) - 1; });
+    (game.equippedPets || []).forEach(p => {
+        const traitM = typeof petTraitMult === "function" ? petTraitMult(p) : 1;
+        m += ((p.power || 1) * traitM) - 1;
+    });
+    if (typeof buildingPetMult === "function") m *= buildingPetMult();
     return Math.max(1, m);
 }
 function upgradeCost(i) {
     const u = UPGRADES[i]; if (!u) return Infinity;
-    return Math.floor(u.baseCost * Math.pow(1.15, game.upgrades[i] || 0));
+    const lvl = game.upgrades[i] || 0;
+    return Math.floor(u.baseCost * Math.pow(UPGRADE_GROWTH, lvl) * (1 + lvl * 0.018));
 }
-function getRebirthCost() { return 5000000 * Math.pow(4, game.rebirths || 0); }
+function getRebirthCost() {
+    let c = Math.floor(12000000 * Math.pow(4.9, game.rebirths || 0));
+    if (typeof ascensionMutatorMult === "function") c = Math.floor(c * ascensionMutatorMult("rebirth"));
+    return c;
+}
+function peakWorld() { return Math.max(game.peakWorldIdx || 0, game.worldIdx || 0); }
+function totalAuraSpent() {
+    let s = 0;
+    AURA_UPGRADES.forEach((u, i) => {
+        const lvl = game.auraUpgrades[i] || 0;
+        for (let l = 0; l < lvl; l++) s += Math.floor(u.base * Math.pow(2.1, l) * (l >= 15 ? 3 : 1));
+    });
+    return s;
+}
 function auraGainPreview() {
-    return Math.max(1, Math.floor(Math.pow(game.rebirths + 1, 1.35) * auraMult("auragain")));
+    const rb = game.rebirths || 0;
+    const w = peakWorld();
+    let base = Math.floor(Math.log2(rb + 1) * 2 + Math.sqrt(w + 1));
+    const c = game.casino;
+    const tax = c && c.auraTaxStacks ? Math.max(0.45, 1 - c.auraTaxStacks * 0.05) : 1;
+    return Math.max(1, Math.floor(base * auraMult("auragain") * tax));
 }
 function auraUpCost(i) {
-    const u = AURA_UPGRADES[i]; return Math.floor(u.base * Math.pow(1.7, game.auraUpgrades[i] || 0));
+    const u = AURA_UPGRADES[i];
+    const lvl = game.auraUpgrades[i] || 0;
+    return Math.floor(u.base * Math.pow(2.1, lvl) * (lvl >= 15 ? 3 : 1));
+}
+function grantChips(n, reason) {
+    if (!n || n <= 0) return;
+    game.chips = (game.chips || 0) + n;
+    if (reason) showToast("🪙 +" + n + " Chips · " + reason, 2200);
 }
 function initUpgrades() {
     if (!game.upgrades) game.upgrades = {};
@@ -1186,7 +1475,7 @@ function initUpgrades() {
 // ============================================================
 //  SAVE / LOAD (+ offline earnings)
 // ============================================================
-const SAVE_KEY = "fartSave_v6";
+const SAVE_KEY = "fartSave_v9";
 let offlinePending = 0;
 
 function clearAllSaveData() {
@@ -1210,6 +1499,13 @@ function sanitizeGameState() {
     if (typeof game.aura !== "number" || isNaN(game.aura) || game.aura < 0) game.aura = 0;
     if (!game.auraUpgrades || typeof game.auraUpgrades !== "object") game.auraUpgrades = {};
     if (!game.redeemedCodes || typeof game.redeemedCodes !== "object") game.redeemedCodes = {};
+    if (game.redeemedCodes.admin) game.adminMode = true;
+    if (typeof game.chips !== "number" || isNaN(game.chips) || game.chips < 0) game.chips = 0;
+    if (typeof game.peakWorldIdx !== "number" || game.peakWorldIdx < 0) game.peakWorldIdx = game.worldIdx || 0;
+    game.peakWorldIdx = Math.max(game.peakWorldIdx, game.worldIdx || 0);
+    if (!game.casino && typeof freshCasinoState === "function") game.casino = freshCasinoState();
+    else if (!game.casino) game.casino = { secretShards: 0, lastWheelSpin: 0, slotBuffUntil: 0, slotBuffMult: 1, goldenBuffUntil: 0, goldenBuffMult: 1, eggDiscountUntil: 0, eggDiscountPct: 0, scratchPity: 0, lootPity: 0, totalGambles: 0 };
+    if (typeof ensureCasino === "function") ensureCasino();
     AURA_UPGRADES.forEach((u, i) => {
         let lvl = game.auraUpgrades[i] || 0;
         if (typeof lvl !== "number" || isNaN(lvl) || lvl < 0) lvl = 0;
@@ -1217,6 +1513,7 @@ function sanitizeGameState() {
         game.auraUpgrades[i] = lvl;
     });
     initUpgrades();
+    if (typeof ensureMeta === "function") ensureMeta();
 }
 
 let saveTimer = null;
@@ -1236,7 +1533,9 @@ function saveGame(force) {
 }
 function loadGame() {
     try {
-        const s = localStorage.getItem(SAVE_KEY);
+        let s = localStorage.getItem(SAVE_KEY);
+        if (!s) s = localStorage.getItem("fartSave_v8");
+        if (!s) s = localStorage.getItem("fartSave_v7");
         if (s) {
             const p = JSON.parse(s);
             if (p && typeof p === "object") {
@@ -1251,6 +1550,7 @@ function loadGame() {
         game = freshGameState();
     }
     sanitizeGameState();
+    if ((game.chips || 0) < 3 && (game.totalEarned || 0) < 5000) game.chips = 8;
     indexWorld = game.worldIdx;
     computeOffline();
 }
@@ -1287,6 +1587,13 @@ function handleMainClick(e) {
     lastClickTime = now;
     spamMultiplier = 1 + (comboValue / 100) * 2.5;
     game.totalClicks++;
+    if (typeof trackStat === "function") {
+        trackStat("totalClicks", 1);
+        if (typeof ensureMeta === "function") {
+            const qs = ensureMeta().quests.session;
+            if (qs) qs.clicksSession = (qs.clicksSession || 0) + 1;
+        }
+    }
 
     const critChance = Math.min(0.05 + comboValue * 0.0015, 0.25);
     criticalMultiplier = 1;
@@ -1295,6 +1602,7 @@ function handleMainClick(e) {
     let dmg = getClickPower() * spamMultiplier * getPetMult() * criticalMultiplier;
     if (isNaN(dmg) || dmg < 0) dmg = 1;
     game.points += dmg; game.totalEarned += dmg;
+    if (typeof invasionClick === "function") invasionClick(dmg);
 
     sfxClick();
     const w = WORLDS[game.worldIdx || 0];
@@ -1346,7 +1654,7 @@ function maybeBrainrotPop() {
 }
 
 
-function levelCost(i, lvl) { return Math.floor(UPGRADES[i].baseCost * Math.pow(1.15, lvl)); }
+function levelCost(i, lvl) { return Math.floor(UPGRADES[i].baseCost * Math.pow(UPGRADE_GROWTH, lvl) * (1 + lvl * 0.018)); }
 // how many levels you'd buy in current mode, and total cost
 function bulkInfo(i) {
     const cur = game.upgrades[i] || 0;
@@ -1355,7 +1663,7 @@ function bulkInfo(i) {
     if (buyMode === "max") {
         const first = levelCost(i, cur);
         if (!isFinite(first) || first <= 0 || game.points < first) return { count: 0, total: first, affordable: false };
-        const growth = 1.15;
+        const growth = UPGRADE_GROWTH;
         count = Math.min(cap, Math.max(1, Math.floor(Math.log(game.points * (growth - 1) / first + 1) / Math.log(growth))));
         total = first * (Math.pow(growth, count) - 1) / (growth - 1);
         while (count > 0 && total > game.points) {
@@ -1378,6 +1686,11 @@ function bulkInfo(i) {
 }
 function upCard(i) {
     const u = UPGRADES[i], lvl = game.upgrades[i] || 0;
+    if (!upgradeUnlocked(u)) {
+        const need = (u.reqWorld || 0) > (game.worldIdx || 0) ? ("World " + (WORLDS[u.reqWorld] ? WORLDS[u.reqWorld].name : u.reqWorld)) : (u.reqRebirths + " rebirths");
+        return '<button class="up-card locked" disabled><div class="up-ico">' + iconHTML(u.icon, "up-ico-img", u.name) + '</div>' +
+            '<div class="up-mid"><div class="up-name">' + u.name + '</div><div class="up-stat">🔒 Unlock: ' + need + '</div></div></button>';
+    }
     const info = bulkInfo(i);
     const ok = info.affordable && info.count > 0;
     const stat = u.type === "click" ? "+" + fmt(u.clickPower) + " / click" : "+" + fmt(u.passivePower) + " / sec";
@@ -1403,6 +1716,7 @@ function renderUpgradeTabs() {
     if (!s) s = '<p class="empty-text">All pet slots unlocked! 🎉</p>';
     const ce = document.getElementById("up-click"), pe = document.getElementById("up-passive"), se = document.getElementById("up-slots");
     if (ce) ce.innerHTML = c; if (pe) pe.innerHTML = p; if (se) se.innerHTML = s;
+    if (typeof renderBuildingsTab === "function") renderBuildingsTab();
     upgradesRendered = true;
 }
 
@@ -1411,7 +1725,7 @@ function renderUpgradeTabs() {
 //  BUYING
 // ============================================================
 function buyUpgrade(i) {
-    const u = UPGRADES[i]; if (!u) return;
+    const u = UPGRADES[i]; if (!u || !upgradeUnlocked(u)) return;
     const info = bulkInfo(i);
     if (info.count > 0 && info.affordable && game.points >= info.total) {
         game.points -= info.total; game.upgrades[i] = (game.upgrades[i] || 0) + info.count;
@@ -1446,6 +1760,8 @@ function openSheet(name) {
     if (name === "pets") renderPetSheet();
     if (name === "worlds") renderWorlds();
     if (name === "aura") renderAura();
+    if (name === "casino") renderCasino();
+    if (name === "hub" && typeof renderHub === "function") renderHub();
     if (name === "settings") syncSettingsUI();
     overlay.classList.add("visible"); sheet.classList.add("open");
     // highlight the active nav button
@@ -1463,6 +1779,7 @@ function showUpTab(name, btn) {
     document.querySelectorAll("#sheet-upgrades .stab").forEach(b => b.classList.remove("active"));
     const tab = document.getElementById("up-" + name); if (tab) tab.classList.add("active");
     if (btn) btn.classList.add("active");
+    if (name === "factories" && typeof renderBuildingsTab === "function") renderBuildingsTab();
 }
 
 
@@ -1552,15 +1869,42 @@ function redeemCode() {
         return;
     }
 
+    if (code === "deadmin" || code === "noadmin") {
+        game.adminMode = false;
+        delete game.redeemedCodes.admin;
+        game.points = 0;
+        game.chips = 0;
+        game.aura = 0;
+        game.totalEarned = 0;
+        if (game.casino) { game.casino.secretShards = 0; game.casino.crateKeys = 0; }
+        if (input) input.value = "";
+        sfxBuy();
+        showToast("🧹 Admin OFF · currencies reset to 0", 2800);
+        setCodeStatus("Admin mode disabled. Stink, Chips, Aura reset.", true);
+        refreshRewardViews();
+        saveGame(true);
+        return;
+    }
+
     if (code === "admin") {
-        game.points = Math.max(game.points || 0, 1e300);
+        game.adminMode = true;
+        game.points = 1e300;
+        game.chips = 1e9;
+        game.aura = 1e7;
         game.totalEarned = Math.max(game.totalEarned || 0, game.points);
         game.redeemedCodes.admin = Date.now();
+        if (!game.casino && typeof freshCasinoState === "function") game.casino = freshCasinoState();
+        if (game.casino) {
+            game.casino.secretShards = 999;
+            game.casino.crateKeys = 9999;
+            game.casino.dailyGambles = 0;
+        }
         if (input) input.value = "";
         sfxRare(4);
         screenFlash("#FFD54A");
-        showToast("🛠️ Admin mode: unlimited Stink added!", 2600);
-        setCodeStatus("Admin testing Stink added.", true);
+        rainbowFlash();
+        showToast("🛠️ ADMIN: unlimited Stink, Chips, Aura!", 3000);
+        setCodeStatus("Admin mode active — all currencies maxed.", true);
         refreshRewardViews();
         saveGame(true);
         return;
@@ -1596,18 +1940,31 @@ function rebirth() {
     const cost = getRebirthCost();
     if (game.points < cost) { sfxError(); showToast("❌ Need " + fmt(cost) + " Stink to Rebirth!", 2500); return; }
     const gain = auraGainPreview();
+    const chipGain = Math.max(1, Math.floor(Math.sqrt(game.rebirths + 1) * 2 + Math.sqrt(peakWorld() + 1)));
     game.rebirths++; game.aura += gain;
+    if (typeof trackStat === "function") {
+        trackStat("totalRebirths", 1);
+        if (typeof ensureMeta === "function") {
+            const qs = ensureMeta().quests.session;
+            if (qs) qs.rebirthsSession = (qs.rebirthsSession || 0) + 1;
+        }
+        if (typeof maybeRefreshQuests === "function") maybeRefreshQuests();
+    }
     game.points = 0; game.upgrades = {}; initUpgrades();
     comboValue = 0; spamMultiplier = 1;
+    grantChips(chipGain);
+    if (game.casino) game.casino.auraTaxStacks = Math.max(0, (game.casino.auraTaxStacks || 0) - 1);
     sfxRare(4); screenFlash("#ffd54a"); shake(); shockwave("#ffd54a"); emojiRain(["🔄","✦","💨","🌟"], 24);
     updateDisplay(); renderUpgradeTabs(); renderWorlds(); saveGame();
     bigBanner("REBIRTH #" + game.rebirths, "#ffd54a");
-    showToast("🔄 REBORN! +25% power · +" + gain + " ✦ Aura!", 3200);
+    showToast("🔄 REBORN! +" + gain + " ✦ Aura · +" + chipGain + " 🪙 Chips!", 3200);
 }
 function renderWorlds() {
     let html = '<div class="world-grid">';
     WORLDS.forEach((w, i) => {
-        const unlocked = game.rebirths >= w.reqRebirths, current = game.worldIdx === i;
+        if (w.secret && !(game.meta && game.meta.secrets && game.meta.secrets.secretWorld)) return;
+        const unlocked = w.secret ? true : game.rebirths >= w.reqRebirths;
+        const current = game.worldIdx === i;
         html += '<div class="world-card ' + (unlocked?"unlocked":"locked") + (current?" current":"") +
             '" onclick="' + (unlocked?"selectWorld("+i+")":"") + '"><div class="world-icon">' + iconHTML(w.icon, "world-icon-img", w.name) + '</div>' +
             '<div class="world-name">' + w.name + '</div><div class="world-req">' +
@@ -1617,8 +1974,17 @@ function renderWorlds() {
     const el = document.getElementById("worlds-body"); if (el) el.innerHTML = html;
 }
 function selectWorld(i) {
-    const w = WORLDS[i]; if (!w || game.rebirths < w.reqRebirths) { sfxError(); return; }
-    game.worldIdx = i; indexWorld = i; sfxBuy(); updateDisplay(); renderWorlds(); saveGame();
+    const w = WORLDS[i];
+    if (!w) { sfxError(); return; }
+    if (w.secret && !(game.meta && game.meta.secrets && game.meta.secrets.secretWorld)) { sfxError(); return; }
+    if (!w.secret && game.rebirths < w.reqRebirths) { sfxError(); return; }
+    const prevPeak = game.peakWorldIdx || 0;
+    game.worldIdx = i; indexWorld = i;
+    if (i > prevPeak) {
+        game.peakWorldIdx = i;
+        grantChips(3 + i * 2, "new world unlocked");
+    }
+    sfxBuy(); updateDisplay(); renderWorlds(); saveGame();
     restartWorldMusic();
     applyWorldTheme(); updateCornerGlows();
     screenFlash(w.theme && w.theme.p ? w.theme.p : "#ffd54a");
@@ -1630,8 +1996,10 @@ function selectWorld(i) {
 //  AURA (prestige shop)
 // ============================================================
 function renderAura() {
+    const spent = totalAuraSpent();
     let html = '<div class="aura-hero"><div class="aura-bal">✦ ' + fmt(game.aura) + '</div>' +
-        '<div class="aura-sub">Aura · permanent power. Next rebirth grants <b>+' + auraGainPreview() + ' ✦</b></div></div>';
+        '<div class="aura-sub">Aura is scarce. Next rebirth: <b>+' + auraGainPreview() + ' ✦</b> · spent ' + spent + ' total</div>' +
+        '<div class="aura-sub aura-warn">Casino gambling reduces next rebirth Aura. Invest wisely.</div></div>';
     html += '<div class="aura-list">';
     AURA_UPGRADES.forEach((u, i) => {
         const lvl = game.auraUpgrades[i] || 0;
@@ -1649,6 +2017,9 @@ function buyAura(i) {
     const u = AURA_UPGRADES[i]; if (!u) return;
     const lvl = game.auraUpgrades[i] || 0;
     if (u.max && lvl >= u.max) { sfxError(); return; }
+    if ((u.effect === "multi" || u.effect === "mega") && totalAuraSpent() < 12) {
+        sfxError(); showToast("🔒 Spend 12 ✦ on core auras first!", 2400); return;
+    }
     const cost = auraUpCost(i);
     if (game.aura >= cost) {
         game.aura -= cost; game.auraUpgrades[i] = lvl + 1;
@@ -1664,6 +2035,7 @@ function buyAura(i) {
 function renderPetSheet() {
     if (petTabCur === "collection") renderPets();
     else if (petTabCur === "fuse") renderFuse();
+    else if (petTabCur === "jobs" && typeof renderPetJobs === "function") renderPetJobs();
     else renderIndex();
 }
 function showPetTab(name, btn) {
@@ -1779,7 +2151,15 @@ function fusePet(name, star) {
     const top = consumed[0];
     const fused = { id: Date.now()+Math.floor(Math.random()*100000), name: top.name, emoji: top.emoji,
         rarity: top.rarity, star: (star||0)+1, power: +(top.power * 2.2).toFixed(2) };
+    if (top.trait) fused.trait = top.trait;
+    else if (consumed[1] && consumed[1].trait && Math.random() < 0.4) fused.trait = consumed[1].trait;
+    if (Math.random() < 0.08 + star * 0.03) {
+        const tiers = ["common","uncommon","rare","epic","legendary","secret","ultra","divine"];
+        const idx = tiers.indexOf(fused.rarity);
+        if (idx >= 0 && idx < tiers.length - 1 && Math.random() < 0.25) fused.rarity = tiers[idx + 1];
+    }
     game.pets.push(fused);
+    if (typeof trackStat === "function") trackStat("petsFused", 1);
     sfxRare(4); screenFlash(RARITY[fused.rarity].color); burstAt(window.innerWidth/2, window.innerHeight*0.4, RARITY[fused.rarity].color, 36); shake(); emojiRain(["✨","⭐",fused.emoji],18);
     showToast("✨ Fused " + fused.name + " " + "⭐".repeat(fused.star) + " (" + fused.power.toFixed(2) + "x)!", 3000);
     renderFuse(); updateDisplay(); saveGame();
@@ -2031,7 +2411,12 @@ function closeEggModal() { const m=document.getElementById("egg-modal"); if(m)m.
 function renderEggShop() {
     const bal = document.getElementById("egg-balance"); if (bal) bal.innerText = fmt(game.points);
     const multiLvl = auraLevel("multi"), megaLvl = auraLevel("mega");
-    let html = '<div class="egg-grid">';
+    let html = "";
+    if (typeof currentMemePet === "function") {
+        const meme = currentMemePet();
+        html += '<div class="meme-week-banner">🔥 Meme of the Week: <b>' + meme.emoji + " " + meme.name + '</b> — boosted in pool!</div>';
+    }
+    html += '<div class="egg-grid">';
     getEggTemplates().forEach((egg, idx) => {
         const cost = eggCost(egg, game.worldIdx), ok = game.points >= cost;
         let odds = egg.pets.map(p => { const r=RARITY[p.rarity];
@@ -2061,22 +2446,29 @@ function rollEggMulti(idx, count) {
     if (game.points < cost) { sfxError(); showToast("❌ Not enough Stink!", 1500); return; }
     game.points -= cost;
     const results = [];
-    for (let i=0; i<count; i++) {
+    for (let i = 0; i < count; i++) {
         const chosen = rollBestFromEgg(egg);
-        const pet = { id: Date.now()+Math.floor(Math.random()*100000)+i, name: chosen.name, emoji: chosen.emoji,
-            rarity: chosen.rarity, star: 0, power: petPower(chosen.base, game.worldIdx) };
-        game.pets.push(pet);
-        game.discovered[dexKey(game.worldIdx, pet.name)] = true;
-        results.push({ pet, egg });
+        results.push({
+            pet: {
+                id: Date.now() + Math.floor(Math.random() * 100000) + i,
+                name: chosen.name,
+                emoji: chosen.emoji,
+                rarity: chosen.rarity,
+                star: 0,
+                power: petPower(chosen.base, game.worldIdx)
+            },
+            egg: egg
+        });
     }
-    updateDisplay(); saveGame();
+    saveGame();
     hatchMultiSession = true;
     hatchQueue = results.slice(1);
     playHatch(results[0].pet, results[0].egg);
 }
 function pickFromEgg(egg) {
-    let roll = Math.random() * 100, chosen = egg.pets[0];
-    for (const p of egg.pets) { if (roll < p.odds) { chosen = p; break; } roll -= p.odds; }
+    const pets = scaleEggPets(egg);
+    let roll = Math.random() * 100, chosen = pets[0];
+    for (const p of pets) { if (roll < p.odds) { chosen = p; break; } roll -= p.odds; }
     return chosen;
 }
 function rollEgg(idx) {
@@ -2087,11 +2479,15 @@ function rollEgg(idx) {
     hatchMultiSession = false;
     hatchQueue = [];
     const chosen = rollBestFromEgg(egg);
-    const pet = { id: Date.now()+Math.floor(Math.random()*100000), name: chosen.name, emoji: chosen.emoji,
-        rarity: chosen.rarity, star: 0, power: petPower(chosen.base, game.worldIdx) };
-    game.pets.push(pet);
-    game.discovered[dexKey(game.worldIdx, pet.name)] = true;
-    updateDisplay(); saveGame();
+    const pet = {
+        id: Date.now() + Math.floor(Math.random() * 100000),
+        name: chosen.name,
+        emoji: chosen.emoji,
+        rarity: chosen.rarity,
+        star: 0,
+        power: petPower(chosen.base, game.worldIdx)
+    };
+    saveGame();
     playHatch(pet, egg);
 }
 
@@ -2153,13 +2549,37 @@ function playHatchTurbo(pet, egg) {
                 '<div class="hatch-name">' + pet.name + '</div>' +
                 '<div class="hatch-power" style="color:' + r.color + '">' + pet.power.toFixed(2) + 'x click power</div>';
             resEl.classList.add("show");
-            hatchTimeout = setTimeout(finishHatch, advanceTime);
+            hatchTimeout = setTimeout(finishHatch, tier >= 5 ? advanceTime + 800 : advanceTime);
         }, 45 + tier * 10);
     }, buildTime);
 }
 
+function commitHatchPet(pet) {
+    if (!pet) return;
+    if (typeof rollPetTrait === "function") rollPetTrait(pet);
+    const exists = (game.pets || []).some(p => p.id === pet.id);
+    if (!exists) game.pets.push(pet);
+    game.discovered[dexKey(game.worldIdx, pet.name)] = true;
+    if (typeof savePhotoHatch === "function") savePhotoHatch(pet);
+    if (typeof trackStat === "function") {
+        trackStat("totalHatches", 1);
+        if (typeof ensureMeta === "function") {
+            const qs = ensureMeta().quests.session;
+            if (qs) qs.hatchesSession = (qs.hatchesSession || 0) + 1;
+            const tier = (RARITY[pet.rarity] || RARITY.common).tier;
+            if (tier >= 4) trackStat("legendariesHatched", 1);
+            if (tier >= 5) {
+                trackStat("secretsHatched", 1);
+                if (qs) qs.legendSession = (qs.legendSession || 0) + 1;
+            }
+        }
+        if (typeof maybeRefreshQuests === "function") maybeRefreshQuests();
+    }
+}
+
 function playHatch(pet, egg) {
-    if (hatchMultiSession) return playHatchTurbo(pet, egg);
+    const hatchTier = (RARITY[pet.rarity] || RARITY.common).tier;
+    if (hatchMultiSession && hatchTier < 5) return playHatchTurbo(pet, egg);
     clearHatchAnim();
     hatchActive = true; pendingHatch = pet;
     const r = RARITY[pet.rarity] || RARITY.common;
@@ -2189,8 +2609,8 @@ function playHatch(pet, egg) {
     const hatchFx = buildHatchFX(overlay, r.color, tier, pet.emoji || egg.emoji);
 
     // ---- PHASE 1: suspense build-up (scales by tier) ----
-    const buildTimes = [600, 1000, 1600, 2400, 3400, 4800];
-    const buildTime = buildTimes[tier] || 600;
+    const buildTimes = [700, 1100, 1800, 2800, 4200, 6200, 7200, 8500];
+    const buildTime = buildTimes[tier] || 700;
 
     eggEl.style.transition = "transform " + (buildTime/1000).toFixed(1) + "s cubic-bezier(0.2,0,0.8,1), filter " + (buildTime/1000).toFixed(1) + "s ease";
     hatchDelay(() => {
@@ -2290,24 +2710,39 @@ function playHatch(pet, egg) {
             burstAt(window.innerWidth*0.8, window.innerHeight*0.3, r.color, 30);
         }
         if (tier >= 5) {
-            emojiRain(["✦","💎",pet.emoji,"💥","🌈","🔱","⭐","🌟"], 140);
+            document.body.classList.add("slowmo");
+            overlay.classList.add("secret-hatch");
+            emojiRain(["✦","💎",pet.emoji,"💥","🌈","🔱","⭐","🌟"], 180);
             rainbowFlash();
             shockwave("#ffffff");
-            spawnConfetti("#ffffff", 100);
-            spawnConfetti(r.color, 100);
-            burstAt(window.innerWidth/2, window.innerHeight*0.4, "#ffffff", 80);
-            burstAt(window.innerWidth*0.1, window.innerHeight*0.5, r.color, 40);
-            burstAt(window.innerWidth*0.9, window.innerHeight*0.5, r.color, 40);
-            hatchDelay(() => { shake(); rainbowFlash(); sfxRare(5); shockwave(r.color); }, 200);
-            hatchDelay(() => { shake(); shockwave("#ffffff"); emojiRain(["✦","💎","🔱","👑","🌟"], 80); }, 500);
-            hatchDelay(() => { rainbowFlash(); shockwave(r.color); sfxRare(5); }, 800);
-            hatchDelay(() => { shake(); rainbowFlash(); shockwave("#ffffff"); }, 1100);
-            overlay.style.transition = "background 0.08s";
-            hatchDelay(() => { overlay.style.background = "#000000f0"; }, 100);
-            hatchDelay(() => { overlay.style.background = r.color + "bb"; rainbowFlash(); }, 300);
-            hatchDelay(() => { overlay.style.background = "#000000f0"; }, 550);
-            hatchDelay(() => { overlay.style.background = "radial-gradient(ellipse at center," + r.color + "55 0%,rgba(5,2,12,0.97) 65%)"; rainbowFlash(); }, 750);
-            if (!multiActive) hatchDelay(() => bigBanner("✦ SECRET FOUND ✦", r.color), 250);
+            spawnConfetti("#ffffff", 140);
+            spawnConfetti(r.color, 140);
+            burstAt(window.innerWidth/2, window.innerHeight*0.4, "#ffffff", 100);
+            burstAt(window.innerWidth*0.1, window.innerHeight*0.5, r.color, 50);
+            burstAt(window.innerWidth*0.9, window.innerHeight*0.5, r.color, 50);
+            for (let si = 0; si < 8; si++) {
+                hatchDelay(() => {
+                    shake();
+                    rainbowFlash();
+                    sfxRare(5);
+                    shockwave(si % 2 ? "#ffffff" : r.color);
+                    screenFlash(si % 2 ? r.color : "#ffffff");
+                }, 150 + si * 220);
+            }
+            hatchDelay(() => { emojiRain(["✦","💎","🔱","👑","🌟","🚽","💥"], 120); }, 600);
+            hatchDelay(() => {
+                const bannerTxt = tier >= 7 ? "☄ DIVINE!!! ☄" : (tier >= 6 ? "⚡ ULTRA!!! ⚡" : "✦ SECRET FOUND ✦");
+                bigBanner(bannerTxt, r.color);
+            }, 200);
+            overlay.style.transition = "background 0.06s";
+            [100, 280, 460, 640, 820, 1000].forEach((ms, i) => {
+                hatchDelay(() => {
+                    overlay.style.background = i % 2
+                        ? "radial-gradient(ellipse at center," + r.color + "66 0%,#000000f5 70%)"
+                        : "#000000f2";
+                    rainbowFlash();
+                }, ms);
+            });
         }
 
         // ---- PHASE 4: REVEAL ----
@@ -2341,8 +2776,8 @@ function playHatch(pet, egg) {
                 document.body.classList.remove("slowmo");
 
                 if (multiActive) {
-                    if (skip) { skip.textContent = "Next egg..."; skip.style.opacity = "0.45"; skip.style.pointerEvents = "none"; }
-                    hatchTimeout = setTimeout(finishHatch, 900 + tier * 100);
+                    if (skip) { skip.textContent = tier >= 5 ? "SECRET!!!" : "Next egg..."; skip.style.opacity = "0.45"; skip.style.pointerEvents = "none"; }
+                    hatchTimeout = setTimeout(finishHatch, tier >= 5 ? 5500 : (900 + tier * 100));
                 } else if (tier === 0) {
                     if (skip) { skip.style.opacity = "0.35"; skip.style.pointerEvents = "none"; }
                     hatchTimeout = setTimeout(finishHatch, 1400);
@@ -2363,7 +2798,9 @@ function overlayTap() {
 }
 function finishHatch() {
     if (!hatchActive) return;
+    if (pendingHatch) commitHatchPet(pendingHatch);
     hatchActive = false;
+    pendingHatch = null;
     if (hatchChargeInt) { clearInterval(hatchChargeInt); hatchChargeInt = null; }
     if (hatchTimeout) { clearTimeout(hatchTimeout); hatchTimeout = null; }
     hatchAnimTimers.forEach(t => clearTimeout(t));
@@ -2373,17 +2810,19 @@ function finishHatch() {
     const resEl = document.getElementById("hatch-result");
     if (rays) rays.classList.remove("spin");
     if (resEl) { resEl.innerHTML = ""; resEl.className = "hatch-result"; }
-    if (overlay) overlay.classList.add("hidden");
+    if (overlay) { overlay.classList.add("hidden"); overlay.classList.remove("secret-hatch"); }
     document.body.classList.remove("slowmo");
     if (hatchQueue.length > 0) {
         const next = hatchQueue.shift();
-        const gap = hatchMultiSession ? 50 : 350;
+        const nextTier = (RARITY[next.pet.rarity] || RARITY.common).tier;
+        const gap = hatchMultiSession ? (nextTier >= 5 ? 400 : 60) : 350;
         hatchAnimTimers.push(setTimeout(() => playHatch(next.pet, next.egg), gap));
         return;
     }
     hatchMultiSession = false;
     updateDisplay();
     renderEggShop();
+    if (sheetOpen("pets")) renderPetSheet();
     const m = document.getElementById("egg-modal"); if (m) m.classList.remove("hidden");
     petTabCur = "collection";
 }
@@ -2575,7 +3014,7 @@ function spawnGoldenFart() {
     layer.appendChild(el);
     requestAnimationFrame(() => { el.style.left = "112%"; });
     el.onclick = () => {
-        const goldMult = 1 + auraLevel("golden") * 0.5;
+        const goldMult = (1 + auraLevel("golden") * 0.5) * (typeof casinoGoldenMult === "function" ? casinoGoldenMult() : 1);
         // world scaling: each world makes golden farts exponentially more valuable
         const worldScale = Math.pow(1.6, game.worldIdx || 0);
         // reward = 5 minutes passive OR 1000 clicks, whichever bigger, times world scale
@@ -2641,11 +3080,20 @@ function setTxt(id, v) {
 }
 function updateDisplay() {
     setTxt("points", fmt(game.points));
+    setTxt("chips", fmt(game.chips || 0));
     setTxt("per-click", fmt(getClickPower() * getPetMult()));
     setTxt("passive-income", fmt(getPassive() * getPetMult()) + "/s");
     setTxt("rebirths", String(game.rebirths || 0));
     setTxt("aura-mini", "✦ " + fmt(game.aura));
     if (WORLDS[game.worldIdx]) setTxt("world-name", WORLDS[game.worldIdx].name);
+    if (typeof brainrotTitle === "function") setTxt("brainrot-title", brainrotTitle());
+    if (typeof brainrotLevel === "function") {
+        const bl = brainrotLevel();
+        const bar = byId("brainrot-fill");
+        if (bar) bar.style.width = Math.min(100, bl) + "%";
+        setTxt("brainrot-lvl", "Lv " + bl);
+    }
+    if (typeof renderInvasionHud === "function") renderInvasionHud();
     const rb = byId("rebirth-btn");
     if (rb) {
         const cost = getRebirthCost();
@@ -2709,6 +3157,7 @@ function initGame() {
     startAmbientParticles();
     startAmbientEffects();
     addCornerGlows();
+    if (typeof initMeta === "function") initMeta();
 }
 
 // ============================================================

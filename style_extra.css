@@ -313,10 +313,6 @@
     display: grid;
     place-items: center;
 }
-.main-icon-img {
-    width: clamp(4.8rem, 21vw, 7.6rem);
-    height: clamp(4.8rem, 21vw, 7.6rem);
-}
 .logo-icon-img { width: 1.35rem; height: 1.35rem; margin-right: 6px; }
 .nav-icon-img { width: 1.85rem; height: 1.85rem; }
 .offline-icon-img { width: 4.8rem; height: 4.8rem; }
@@ -1184,6 +1180,287 @@ body::before {
     18%, 82% { opacity: 0.62; }
     100% { opacity: 0; transform: translateY(-70px) scale(1.25) rotate(16deg); }
 }
+
+/* ---- MAIN EMOJI FIX (revert to icon-atlas + glow) ---- */
+.wheel-spinner-emoji {
+    font-size: 5rem; display: block; text-align: center; margin: 20px 0;
+    animation: wheelSpin 3.2s cubic-bezier(0.2,0.8,0.3,1) forwards;
+}
+.stat-grid-5 { grid-template-columns: repeat(5, 1fr) !important; }
+.stat-chips .stat-value { color: #ffd54a; }
+
+/* ---- STINK CASINO ---- */
+.casino-hero {
+    text-align: center;
+    padding: 14px 12px 18px;
+    margin-bottom: 14px;
+    border-radius: 18px;
+    background: linear-gradient(135deg, rgba(255,61,154,0.18), rgba(177,78,255,0.14), rgba(0,224,255,0.1));
+    border: 1px solid rgba(255,255,255,0.12);
+    box-shadow: 0 0 28px rgba(255,61,154,0.15);
+}
+.casino-hero-title {
+    font-family: 'Russo One', sans-serif;
+    font-size: 1.35rem;
+    color: #ffd54a;
+    text-shadow: 0 0 16px rgba(255,213,74,0.5);
+}
+.hatch-overlay.secret-hatch {
+    animation: secretHatchPulse 0.35s ease-in-out infinite alternate;
+}
+@keyframes secretHatchPulse {
+    from { filter: brightness(1) saturate(1.2); }
+    to { filter: brightness(1.35) saturate(1.6); }
+}
+.casino-hero-sub { font-size: 0.82rem; color: var(--muted); margin-top: 4px; }
+.casino-stats {
+    display: flex; flex-wrap: wrap; justify-content: center; gap: 6px;
+    margin-top: 12px;
+}
+.casino-stat-pill {
+    display: inline-flex; align-items: center; gap: 5px;
+    background: rgba(255,255,255,0.07); border: 1px solid rgba(255,255,255,0.12);
+    border-radius: 20px; padding: 4px 10px; font-size: 0.76rem; white-space: nowrap;
+}
+.cs-ico { font-size: 1rem; line-height: 1; }
+.chip-coin {
+    display: inline-grid; place-items: center;
+    width: 18px; height: 18px; border-radius: 50%;
+    background: radial-gradient(circle at 35% 30%, #ffe7a0, #ffb300 60%, #cc8800);
+    border: 2px dashed rgba(255,255,255,0.7);
+    color: #6b4400; font-size: 0.62rem; font-weight: 900; line-height: 1;
+    box-shadow: 0 0 6px rgba(255,179,0,0.6); vertical-align: middle;
+}
+
+/* ---- REAL WHEEL ---- */
+.wheel-stage { position: relative; width: 260px; margin: 8px auto 12px; }
+.wheel-pointer {
+    position: absolute; top: -6px; left: 50%; transform: translateX(-50%);
+    font-size: 1.8rem; color: #ffd54a; z-index: 3; line-height: 1;
+    filter: drop-shadow(0 2px 4px rgba(0,0,0,0.6));
+}
+.wheel-rotor { width: 260px; height: 260px; will-change: transform; }
+.wheel-svg { width: 100%; height: 100%; display: block; filter: drop-shadow(0 0 16px rgba(177,78,255,0.4)); }
+.wheel-odds-list {
+    display: flex; flex-wrap: wrap; justify-content: center; gap: 5px 10px;
+    font-size: 0.66rem; color: var(--muted); margin: 8px 0;
+}
+.wheel-odd { display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; }
+.wheel-odd-dot { width: 9px; height: 9px; border-radius: 50%; display: inline-block; }
+.wheel-odd b { color: #fff; }
+
+/* ---- CRATE ITEMS ---- */
+.crate-item-emoji { font-size: 1.9rem; line-height: 1; }
+.crate-item-label { font-size: 0.5rem; margin-top: 2px; }
+.casino-hot { color: #7fff00; font-weight: 700; animation: casinoPulse 1s ease-in-out infinite; }
+@keyframes casinoPulse { 0%,100%{opacity:1;} 50%{opacity:0.55;} }
+.casino-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+}
+.casino-card {
+    display: flex; flex-direction: column; gap: 6px;
+    padding: 14px 10px; border-radius: 16px; border: 1px solid var(--stroke);
+    background: linear-gradient(145deg, rgba(40,20,70,0.85), rgba(20,10,40,0.9));
+    color: var(--text); cursor: pointer; text-align: left;
+    transition: transform 0.12s ease, box-shadow 0.15s ease;
+}
+.casino-card:hover:not(.disabled) {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 24px rgba(177,78,255,0.35);
+    border-color: rgba(127,255,0,0.4);
+}
+.casino-card.disabled { opacity: 0.45; cursor: not-allowed; }
+.casino-card-title { font-weight: 700; font-size: 0.88rem; color: #fff; }
+.casino-card-desc { font-size: 0.7rem; color: var(--muted); line-height: 1.25; }
+.casino-card-cost { font-size: 0.78rem; font-weight: 700; color: var(--gold); margin-top: auto; }
+.casino-disclaimer { font-size: 0.68rem; color: var(--muted); text-align: center; margin-top: 14px; }
+.casino-shard-btn {
+    width: 100%; margin-top: 12px; padding: 12px; border: none; border-radius: 14px;
+    background: linear-gradient(135deg, #00ffd0, #00e0ff); color: #04121a;
+    font-family: 'Fredoka', sans-serif; font-weight: 700; cursor: pointer;
+}
+.casino-shard-hint { font-size: 0.72rem; color: var(--cyan); text-align: center; margin-top: 10px; }
+.casino-modal-content { width: min(94vw, 400px); }
+.scratch-board { display: flex; gap: 10px; justify-content: center; margin: 20px 0; }
+.scratch-tile {
+    width: 72px; height: 72px; border-radius: 14px; border: 2px solid var(--gold);
+    background: linear-gradient(135deg, #ffd54a, #ff8a3d); color: #1a0e00;
+    font-size: 1.8rem; font-weight: 700; cursor: pointer;
+    display: grid; place-items: center;
+}
+.scratch-tile.covered { background: linear-gradient(135deg, #888, #555); color: #333; }
+.scratch-hint { text-align: center; font-weight: 700; color: var(--cyan); }
+.slots-machine { display: flex; gap: 12px; justify-content: center; margin: 24px 0; }
+.slot-reel {
+    width: 64px; height: 64px; border-radius: 12px;
+    background: rgba(0,0,0,0.4); border: 2px solid var(--purple);
+    display: grid; place-items: center; font-size: 2rem;
+    box-shadow: inset 0 0 16px rgba(177,78,255,0.3);
+}
+.slots-status { text-align: center; font-weight: 700; color: var(--green); }
+.wheel-wrap { display: grid; place-items: center; margin: 24px 0; }
+.wheel-spinner {
+    width: 100px; height: 100px; border-radius: 50%;
+    background: conic-gradient(#ff3d9a, #ffd54a, #7fff00, #00e0ff, #b14eff, #ff3d9a);
+    display: grid; place-items: center; font-size: 2.5rem;
+    box-shadow: 0 0 30px rgba(255,213,74,0.5);
+}
+@keyframes wheelSpin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(1800deg); }
+}
+.wheel-result { text-align: center; font-weight: 700; color: var(--gold); }
+.loot-odds { font-size: 0.68rem; color: var(--muted); text-align: center; margin-bottom: 12px; }
+.loot-slots { display: flex; gap: 10px; justify-content: center; margin: 16px 0; }
+.loot-slot {
+    width: 70px; height: 70px; border-radius: 12px;
+    background: rgba(0,0,0,0.35); border: 2px dashed #ff3d9a;
+    display: grid; place-items: center; font-size: 2rem;
+}
+.loot-slot.revealed { border-style: solid; border-color: var(--gold); animation: lootPop 0.35s ease; }
+@keyframes lootPop { 0%{transform:scale(0.5);} 70%{transform:scale(1.15);} 100%{transform:scale(1);} }
+.loot-status { text-align: center; font-weight: 700; color: var(--pink); min-height: 2.5em; }
+.scratch-outer {
+    position: relative; width: min(100%, 320px); height: 200px;
+    margin: 12px auto; border-radius: 14px; overflow: hidden;
+    border: 2px solid var(--gold); box-shadow: 0 0 18px rgba(255,213,74,0.3);
+}
+.scratch-sym-grid {
+    display: grid; grid-template-columns: repeat(4, 1fr);
+    grid-template-rows: repeat(3, 1fr);
+    width: 100%; height: 100%; background: #1a0a38;
+}
+.scratch-sym {
+    display: grid; place-items: center; font-size: 1.8rem;
+    border: 1px solid rgba(255,255,255,0.08);
+    background: linear-gradient(135deg, rgba(255,255,255,0.06), rgba(0,0,0,0.3));
+}
+.scratch-foil-canvas {
+    position: absolute; inset: 0; width: 100% !important; height: 100% !important;
+    touch-action: none; cursor: crosshair; border-radius: 12px;
+}
+.mines-hud { text-align: center; font-weight: 700; margin-bottom: 10px; color: var(--cyan); }
+.mines-grid {
+    display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px;
+    max-width: 280px; margin: 0 auto 12px;
+}
+.mine-tile {
+    aspect-ratio: 1; border-radius: 10px; border: 1px solid var(--stroke);
+    background: rgba(0,0,0,0.45); cursor: pointer; padding: 4px;
+    display: grid; place-items: center; font-size: 1.2rem;
+}
+.mine-tile.safe { border-color: #7fff00; box-shadow: 0 0 10px rgba(127,255,0,0.35); }
+.mine-tile.boom { border-color: #ff3030; animation: lootPop 0.4s ease; }
+.mines-cashout { font-size: 0.85rem; }
+.crate-stage { text-align: center; margin-bottom: 8px; }
+.crate-stage-ico { width: 64px; height: 64px; }
+.crate-viewport {
+    position: relative; overflow: hidden; height: 100px;
+    margin: 12px 0; border-radius: 12px;
+    background: linear-gradient(180deg, rgba(0,0,0,0.5), rgba(40,20,60,0.8));
+    border: 2px solid var(--purple);
+}
+.crate-viewport.ohio { border-color: #ff3d9a; }
+.crate-marker {
+    position: absolute; left: 50%; top: 0; bottom: 0; width: 3px;
+    background: #ffd54a; z-index: 2; transform: translateX(-50%);
+    box-shadow: 0 0 12px #ffd54a;
+}
+.crate-strip {
+    display: flex; gap: 4px; height: 100%; align-items: center;
+    will-change: transform;
+}
+.crate-item {
+    flex: 0 0 84px; height: 84px; border-radius: 10px;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.12);
+    font-size: 0.55rem; text-align: center; color: var(--muted);
+}
+.crate-item.tier-3 { border-color: #ffd54a; }
+.crate-item.tier-4 { border-color: #b14eff; }
+.crate-item.tier-5 { border-color: #00ffd0; box-shadow: 0 0 16px rgba(0,255,208,0.4); }
+.crate-status { text-align: center; font-weight: 700; color: var(--gold); min-height: 2em; }
+.ad-modal-content { text-align: center; }
+.ad-progress { height: 8px; background: rgba(255,255,255,0.1); border-radius: 4px; margin: 16px 0; overflow: hidden; }
+#ad-bar { height: 100%; width: 0; background: linear-gradient(90deg, #7fff00, #00e0ff); transition: width 0.15s; }
+.casino-grid { grid-template-columns: 1fr 1fr; }
+@media (max-width: 380px) { .stat-grid-5 { grid-template-columns: repeat(3, 1fr) !important; } }
+.bottom-nav .nav-btn { flex: 1; min-width: 0; }
+.bottom-nav .nav-txt { font-size: 0.68rem !important; }
+
+/* ---- META / HUB SYSTEMS ---- */
+.brainrot-mini {
+    display: flex; align-items: center; gap: 8px; margin: 6px 0 4px;
+    padding: 6px 10px; background: rgba(0,0,0,0.25); border-radius: 10px;
+    border: 1px solid var(--stroke);
+}
+.brainrot-mini-title { font-size: 0.68rem; font-weight: 700; color: var(--gold); flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.brainrot-mini-bar { flex: 2; height: 6px; background: rgba(255,255,255,0.08); border-radius: 4px; overflow: hidden; }
+.brainrot-mini-fill { height: 100%; background: linear-gradient(90deg, var(--purple), var(--cyan)); border-radius: 4px; transition: width 0.4s ease; }
+.brainrot-mini-lvl { font-size: 0.65rem; color: var(--muted); font-weight: 700; }
+.invasion-hud { margin: 4px 0; padding: 6px 10px; background: rgba(255,48,48,0.15); border: 1px solid rgba(255,48,48,0.5); border-radius: 10px; }
+.invasion-hud.hidden { display: none; }
+.inv-hud-label { font-size: 0.7rem; font-weight: 700; color: #ff6060; margin-bottom: 4px; }
+.inv-bar { height: 8px; background: rgba(0,0,0,0.4); border-radius: 4px; overflow: hidden; }
+.inv-fill { height: 100%; background: linear-gradient(90deg, #ff3030, #ff8040); transition: width 0.15s ease; }
+.hub-tabs { flex-wrap: wrap; gap: 4px; }
+.hub-tabs .hstab { flex: 1; min-width: 42px; padding: 10px 4px; font-size: 1rem; }
+.hub-body { position: relative; }
+.hub-tab { display: none; }
+.hub-tab.active { display: block; }
+.meta-hint { font-size: 0.78rem; color: var(--muted); margin-bottom: 10px; line-height: 1.4; }
+.meta-warn { color: #ff8040; font-weight: 700; font-size: 0.82rem; }
+.meta-ok { color: var(--green); font-weight: 700; font-size: 0.82rem; }
+.meta-btn { width: 100%; margin-top: 8px; padding: 12px; border: none; border-radius: 12px; font-family: 'Fredoka', sans-serif; font-weight: 700; cursor: pointer; background: linear-gradient(135deg, var(--purple), var(--cyan)); color: #fff; }
+.meta-btn.danger { background: linear-gradient(135deg, #ff3030, #ff8040); }
+.brainrot-bar-wrap { margin-bottom: 14px; padding: 12px; background: rgba(0,0,0,0.3); border-radius: 14px; border: 1px solid var(--stroke); }
+.brainrot-label { font-weight: 700; color: var(--gold); margin-bottom: 6px; font-size: 0.9rem; }
+.brainrot-bar { height: 10px; background: rgba(255,255,255,0.08); border-radius: 5px; overflow: hidden; }
+.brainrot-fill { height: 100%; background: linear-gradient(90deg, #b14eff, #00e0ff, #7fff00); }
+.brainrot-bonus { font-size: 0.72rem; color: var(--muted); margin-top: 4px; }
+.ach-list { max-height: 50vh; overflow-y: auto; }
+.ach-row { display: grid; grid-template-columns: 28px 1fr; gap: 4px 8px; padding: 8px 6px; border-bottom: 1px solid rgba(255,255,255,0.06); font-size: 0.75rem; }
+.ach-row.got { background: rgba(127,255,0,0.06); }
+.ach-row.got .ach-name { color: var(--green); }
+.ach-name { font-weight: 700; grid-column: 2; }
+.ach-desc { grid-column: 2; color: var(--muted); font-size: 0.68rem; }
+.quest-card { display: flex; justify-content: space-between; align-items: center; padding: 10px 12px; margin-bottom: 8px; background: rgba(0,0,0,0.3); border-radius: 12px; border: 1px solid var(--stroke); font-size: 0.82rem; }
+.quest-card.done { opacity: 0.55; border-color: var(--green); }
+.quest-card.weekly { border-color: var(--gold); }
+.quest-prog { font-weight: 700; color: var(--cyan); }
+.garden-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin: 12px 0; }
+.garden-plot { aspect-ratio: 1; border-radius: 12px; border: 2px dashed rgba(255,255,255,0.2); display: grid; place-items: center; font-size: 1.6rem; background: rgba(0,0,0,0.25); cursor: pointer; }
+.garden-plot.ready { border-color: var(--green); border-style: solid; animation: gardenPulse 1.2s ease infinite; box-shadow: 0 0 12px rgba(127,255,0,0.4); }
+@keyframes gardenPulse { 0%,100%{transform:scale(1);} 50%{transform:scale(1.05);} }
+.garden-seeds { display: flex; flex-wrap: wrap; gap: 6px; }
+.garden-seed-btn { flex: 1 1 45%; padding: 10px 6px; border: 1px solid var(--stroke); border-radius: 10px; background: rgba(0,0,0,0.35); color: #fff; font-family: 'Fredoka', sans-serif; font-size: 0.72rem; font-weight: 700; cursor: pointer; }
+.stock-row { display: grid; grid-template-columns: 52px 1fr 36px auto auto; gap: 6px; align-items: center; padding: 8px 0; border-bottom: 1px solid rgba(255,255,255,0.06); font-size: 0.78rem; }
+.stock-tick { font-weight: 700; color: var(--cyan); }
+.stock-price { color: var(--gold); }
+.stock-held { color: var(--muted); font-size: 0.72rem; }
+.stock-row button { padding: 6px 8px; border: none; border-radius: 8px; background: rgba(177,78,255,0.35); color: #fff; font-size: 0.68rem; font-weight: 700; cursor: pointer; }
+.asc-hero { font-size: 1.1rem; margin-bottom: 8px; color: #fff; }
+.asc-card { width: 100%; text-align: left; padding: 12px; margin-bottom: 8px; border: 1px solid var(--stroke); border-radius: 14px; background: rgba(0,0,0,0.35); cursor: pointer; color: #fff; font-family: 'Fredoka', sans-serif; }
+.asc-card:active { transform: scale(0.98); }
+.asc-name { font-weight: 700; color: var(--gold); margin-bottom: 4px; }
+.asc-desc { font-size: 0.75rem; color: var(--muted); }
+.stats-grid-meta { display: grid; gap: 6px; }
+.stat-row { display: flex; justify-content: space-between; padding: 8px 10px; background: rgba(0,0,0,0.25); border-radius: 10px; font-size: 0.8rem; }
+.synergy-row { font-size: 0.72rem; padding: 6px 10px; margin-bottom: 4px; border-radius: 8px; background: rgba(0,0,0,0.25); color: var(--muted); }
+.synergy-row.active { color: var(--green); background: rgba(127,255,0,0.1); border: 1px solid rgba(127,255,0,0.3); }
+.job-row { display: flex; align-items: center; gap: 8px; padding: 8px 0; border-bottom: 1px solid rgba(255,255,255,0.06); font-size: 0.78rem; flex-wrap: wrap; }
+.job-row select { flex: 1; min-width: 120px; padding: 6px; border-radius: 8px; border: 1px solid var(--stroke); background: rgba(0,0,0,0.4); color: #fff; font-family: 'Fredoka', sans-serif; }
+.hidden-secrets { position: absolute; inset: 0; pointer-events: none; z-index: 1; }
+.hidden-secret-btn { position: absolute; width: 18px; height: 18px; opacity: 0.04; border: none; background: transparent; cursor: pointer; pointer-events: auto; border-radius: 50%; }
+.hidden-secret-btn:hover { opacity: 0.15; }
+.clicker-zone { position: relative; }
+.toilet-secret-btn { position: absolute; right: 8px; bottom: 8px; width: 36px; height: 36px; border: none; border-radius: 50%; background: rgba(93,210,255,0.2); font-size: 1.2rem; cursor: pointer; z-index: 5; opacity: 0.7; }
+.toilet-secret-btn.hidden { display: none; }
+.meme-week-banner { text-align: center; padding: 8px 10px; margin-bottom: 10px; border-radius: 12px; background: linear-gradient(135deg, rgba(255,61,154,0.25), rgba(255,138,61,0.25)); border: 1px solid rgba(255,61,154,0.5); font-size: 0.78rem; font-weight: 700; }
+.slot-row { display: flex; gap: 8px; margin-bottom: 6px; }
+.slot-btn { flex: 1; padding: 10px !important; font-size: 0.82rem !important; }
 
 @media (prefers-reduced-motion: reduce) {
     body::before,
