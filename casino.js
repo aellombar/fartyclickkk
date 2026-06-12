@@ -8,7 +8,7 @@ const DAILY_GAMBLE_CAP = 48;
 const CHIP_BASE = { scratch: 4, mines: 6, crate: 10, loot: 14, wheelPaid: 8 };
 const CASINO_REQ = { scratch: 0, mines: 2, crate: 3, loot: 4, wheel: 0 };
 
-const SCRATCH_SYMBOLS = ["sym-fart", "sym-paw", "sym-gem", "sym-crown", "shard", "skibidi-god"];
+const SCRATCH_SYMBOLS = ["💨", "🐾", "💎", "👑", "🌟", "🚽", "🔥", "⭐"];
 const CRATE_TABLE = [
     { key: "sym-fart", label: "Trash Buff", weight: 700, tier: 0 },
     { key: "sym-paw", label: "Rare Paw", weight: 200, tier: 1 },
@@ -66,10 +66,12 @@ function chipPrice(kind) {
 }
 
 function casinoUnlocked(kind) {
+    if (isAdminMode()) return true;
     return peakWorld() >= (CASINO_REQ[kind] || 0);
 }
 
 function canGamble() {
+    if (isAdminMode()) return true;
     const c = ensureCasino();
     if (c.dailyGambles >= DAILY_GAMBLE_CAP) {
         showToast("🛑 Daily casino cap reached. Come back tomorrow!", 2800);
@@ -167,30 +169,31 @@ function renderCasino() {
     if (!el) return;
     const c = ensureCasino();
     const buffActive = c.slotBuffUntil > Date.now();
+    const buffLeft = buffActive ? Math.ceil((c.slotBuffUntil - Date.now()) / 1000) + "s" : "";
     el.innerHTML =
-        '<div class="casino-hero premium-hero">' +
-            '<div class="casino-hero-icon">' + premiumHTML("chip", "casino-hero-chip", "Casino") + '</div>' +
-            '<div class="casino-hero-title">STINK CASINO</div>' +
+        '<div class="casino-hero">' +
+            '<div class="casino-hero-title">🎰 STINK CASINO</div>' +
             '<div class="casino-hero-sub">Chips only · peak world pricing · house always wins</div>' +
             '<div class="casino-stats">' +
-                '<span>' + premiumHTML("chip", "casino-stat-ico", "Chips") + ' <b>' + fmt(game.chips || 0) + '</b></span>' +
-                '<span>' + premiumHTML("shard", "casino-stat-ico", "Shards") + ' <b>' + c.secretShards + '</b></span>' +
-                '<span>🎲 <b>' + c.dailyGambles + '/' + DAILY_GAMBLE_CAP + '</b> today</span>' +
-                (buffActive ? '<span class="casino-hot">🔥 x' + c.slotBuffMult + ' passive</span>' : '') +
+                '<span class="casino-stat-pill"><span class="cs-ico">🪙</span><b>' + fmt(game.chips || 0) + '</b></span>' +
+                '<span class="casino-stat-pill"><span class="cs-ico">💎</span><b>' + c.secretShards + '</b> shards</span>' +
+                '<span class="casino-stat-pill"><span class="cs-ico">🎲</span><b>' + c.dailyGambles + '/' + DAILY_GAMBLE_CAP + '</b></span>' +
+                (c.crateKeys > 0 ? '<span class="casino-stat-pill"><span class="cs-ico">🔑</span><b>' + c.crateKeys + '</b></span>' : '') +
+                (buffActive ? '<span class="casino-stat-pill casino-hot">🔥 x' + c.slotBuffMult + ' · ' + buffLeft + '</span>' : '') +
             '</div>' +
         '</div>' +
         '<div class="casino-grid">' +
-            casinoCard("scratch", "Dank Scratch", "Scratch foil grid · match line", chipPrice("scratch") + " 🪙", "buyScratch()", !casinoUnlocked("scratch")) +
-            casinoCard("mines", "Stink Mines", "5×5 · cash out or boom", chipPrice("mines") + " 🪙", "startMines()", !casinoUnlocked("mines") || c.minesActive) +
-            casinoCard("crate", "Brainrot Crate", "CSGO-style roll · keys or chips", (c.crateKeys > 0 ? "1 🔑" : chipPrice("crate") + " 🪙"), "openCrate()", !casinoUnlocked("crate")) +
-            casinoCard("loot", "Ohio Case", "Cursed near-miss case", chipPrice("loot") + " 🪙", "openOhioCase()", !casinoUnlocked("loot")) +
-            casinoCard("wheel", "Lucky Wheel", wheelReady() ? "FREE SPIN!" : wheelCountdown(), "FREE", "spinWheel()", !wheelReady()) +
-            casinoCard("ad", "Ad Spin", adWheelReady() ? "Watch ad → bonus spin" : "Ad on cooldown", "📺 FREE", "offerAdWheel()", !adWheelReady()) +
+            casinoCard("scratch", "🎫 Dank Scratch", "Scratch foil grid · match top row", chipPrice("scratch") + " 🪙", "buyScratch()", !casinoUnlocked("scratch")) +
+            casinoCard("mines", "💣 Stink Mines", "5×5 · cash out or boom", chipPrice("mines") + " 🪙", "startMines()", !casinoUnlocked("mines") || c.minesActive) +
+            casinoCard("crate", "📦 Brainrot Crate", "CSGO-style roller · win pets", (c.crateKeys > 0 ? "🔑 1 Key" : chipPrice("crate") + " 🪙"), "openCrate()", !casinoUnlocked("crate")) +
+            casinoCard("loot", "🚽 Ohio Case", "Cursed · 0.001% Skibidi God", chipPrice("loot") + " 🪙", "openOhioCase()", !casinoUnlocked("loot")) +
+            casinoCard("wheel", "🎡 Lucky Wheel", wheelReady() ? "FREE SPIN READY!" : ("Next: " + wheelCountdown()), "FREE", "spinWheel()", !wheelReady()) +
+            casinoCard("ad", "📺 Ad Spin", adWheelReady() ? "Watch ad · bonus spin" : "Cooldown", "FREE", "offerAdWheel()", !adWheelReady()) +
         '</div>' +
         (c.secretShards >= 10
-            ? '<button class="casino-shard-btn" onclick="redeemSecretShards()">' + premiumHTML("shard", "casino-shard-ico", "Shard") + ' Redeem 10 Shards → Secret Pet</button>'
-            : '<p class="casino-shard-hint">Jackpots drop shards. 10 = guaranteed secret pet.</p>') +
-        '<p class="casino-disclaimer">⚠️ Chips are scarce. Near-misses intentional. Gambling taxes your next Aura rebirth.</p>';
+            ? '<button class="casino-shard-btn" onclick="redeemSecretShards()">💎 Redeem 10 Shards → Secret Pet</button>'
+            : '<p class="casino-shard-hint">Jackpots drop 💎 shards · 10 = guaranteed secret pet</p>') +
+        '<p class="casino-disclaimer">⚠️ Chips are scarce. Near-misses intentional. Gambling taxes Aura rebirth.</p>';
 }
 
 function casinoCard(id, title, desc, cost, onclick, disabled) {
@@ -234,99 +237,142 @@ function buyScratch() {
 
 function startScratchCanvas(betChips) {
     const cols = 4, rows = 3;
-    const forceJackpot = ensureCasino().scratchPity >= 22;
+    const c = ensureCasino();
+    const forceJackpot = c.scratchPity >= 22;
     const forceNearMiss = !forceJackpot && Math.random() < 0.36;
     const winSym = SCRATCH_SYMBOLS[Math.floor(Math.random() * SCRATCH_SYMBOLS.length)];
     const grid = [];
-    for (let r = 0; r < rows; r++) {
-        for (let c = 0; c < cols; c++) grid.push(SCRATCH_SYMBOLS[Math.floor(Math.random() * SCRATCH_SYMBOLS.length)]);
+    for (let i = 0; i < cols * rows; i++) {
+        grid.push(SCRATCH_SYMBOLS[Math.floor(Math.random() * SCRATCH_SYMBOLS.length)]);
     }
     if (forceJackpot) {
         for (let i = 0; i < cols; i++) grid[i] = winSym;
-        ensureCasino().scratchPity = 0;
+        c.scratchPity = 0;
     } else if (forceNearMiss) {
         grid[0] = grid[1] = grid[2] = winSym;
         grid[3] = SCRATCH_SYMBOLS.filter(s => s !== winSym)[0];
+    } else {
+        // prevent accidental jackpot
+        if (grid[0] === grid[1] && grid[1] === grid[2] && grid[2] === grid[3]) {
+            grid[3] = SCRATCH_SYMBOLS.filter(s => s !== grid[0])[0];
+        }
     }
-    const html = '<div class="scratch-canvas-wrap"><canvas id="scratch-canvas" width="320" height="240"></canvas></div>' +
-        '<button class="casino-shard-btn scratch-reveal" onclick="finishScratch()">Reveal Result</button>' +
-        '<p class="scratch-hint" id="scratch-hint">Scratch the foil, then reveal. Match full top row.</p>';
+
+    // HTML symbols grid (shown beneath canvas)
+    const symHtml = '<div class="scratch-sym-grid" id="scratch-sym-grid">' +
+        grid.map(s => '<div class="scratch-sym">' + s + '</div>').join("") + '</div>';
+
+    const html = '<div class="scratch-outer">' + symHtml +
+        '<canvas id="scratch-canvas" width="320" height="240" class="scratch-foil-canvas"></canvas>' +
+        '</div>' +
+        '<p class="scratch-hint" id="scratch-hint">👆 Scratch to reveal · drag finger/mouse</p>';
     openCasinoModal("🎫 Dank Scratch", html);
     window._scratchGrid = grid;
     window._scratchBet = betChips;
     window._scratchDone = false;
-    setTimeout(initScratchCanvas, 50);
+    window._scratchCols = cols;
+    setTimeout(initScratchCanvas, 40);
 }
 
 function initScratchCanvas() {
     const canvas = document.getElementById("scratch-canvas");
     if (!canvas) return;
     const ctx = canvas.getContext("2d");
-    const cols = 4, rows = 3;
-    const cellW = canvas.width / cols, cellH = canvas.height / rows;
-    const grid = window._scratchGrid;
-    const foil = new Image();
-    foil.onload = () => drawScratchFrame();
-    foil.src = "assets/premium-atlas.png?v=2";
-    function drawScratchFrame() {
+    // Draw shiny silver foil that covers the symbols
+    function drawFoil() {
         ctx.clearRect(0, 0, canvas.width, canvas.height);
-        for (let i = 0; i < grid.length; i++) {
-            const col = i % cols, row = Math.floor(i / cols);
-            const x = col * cellW, y = row * cellH;
-            const idx = PREMIUM_ICON[grid[i]] || 0;
-            const sx = (idx % PREMIUM_ATLAS.cols) * PREMIUM_ATLAS.cell;
-            const sy = Math.floor(idx / PREMIUM_ATLAS.cols) * PREMIUM_ATLAS.cell;
-            ctx.drawImage(foil, sx, sy, PREMIUM_ATLAS.cell, PREMIUM_ATLAS.cell, x + 4, y + 4, cellW - 8, cellH - 8);
-        }
-        ctx.fillStyle = "rgba(180,180,200,0.95)";
+        // Silver foil gradient base
+        const grad = ctx.createLinearGradient(0, 0, canvas.width, canvas.height);
+        grad.addColorStop(0, "#c8c8d8");
+        grad.addColorStop(0.3, "#e8e8f8");
+        grad.addColorStop(0.55, "#b0b0c8");
+        grad.addColorStop(0.8, "#d8d8e8");
+        grad.addColorStop(1, "#a0a0b8");
+        ctx.fillStyle = grad;
         ctx.fillRect(0, 0, canvas.width, canvas.height);
-        ctx.globalCompositeOperation = "source-over";
-        const foilIdx = PREMIUM_ICON["scratch-foil"] || 4;
-        const fsx = (foilIdx % PREMIUM_ATLAS.cols) * PREMIUM_ATLAS.cell;
-        const fsy = Math.floor(foilIdx / PREMIUM_ATLAS.cols) * PREMIUM_ATLAS.cell;
-        for (let i = 0; i < grid.length; i++) {
-            const col = i % cols, row = Math.floor(i / cols);
-            ctx.drawImage(foil, fsx, fsy, PREMIUM_ATLAS.cell, PREMIUM_ATLAS.cell, col * cellW, row * cellH, cellW, cellH);
+        // Texture streaks
+        ctx.globalAlpha = 0.12;
+        for (let x = 0; x < canvas.width; x += 14) {
+            ctx.fillStyle = x % 28 === 0 ? "#fff" : "#888";
+            ctx.fillRect(x, 0, 6, canvas.height);
         }
+        ctx.globalAlpha = 1;
+        // "SCRATCH ME" text
+        ctx.fillStyle = "rgba(80,80,100,0.55)";
+        ctx.font = "bold 18px Russo One, sans-serif";
+        ctx.textAlign = "center";
+        ctx.fillText("✦ SCRATCH ME ✦", canvas.width / 2, canvas.height / 2);
     }
+    drawFoil();
+
     let scratching = false;
+    let totalErased = 0;
+    const totalPixels = canvas.width * canvas.height;
+
+    function getPos(e) {
+        const rect = canvas.getBoundingClientRect();
+        const scaleX = canvas.width / rect.width;
+        const scaleY = canvas.height / rect.height;
+        const src = e.touches ? e.touches[0] : e;
+        return { x: (src.clientX - rect.left) * scaleX, y: (src.clientY - rect.top) * scaleY };
+    }
+
     function scratchAt(px, py) {
         ctx.globalCompositeOperation = "destination-out";
         ctx.beginPath();
-        ctx.arc(px, py, 18, 0, Math.PI * 2);
+        ctx.arc(px, py, 22, 0, Math.PI * 2);
         ctx.fill();
         ctx.globalCompositeOperation = "source-over";
         sfxClick();
-    }
-    function onEnd() {
-        if (window._scratchDone) return;
-        const top = window._scratchGrid.slice(0, 4);
-        const win = top[0] === top[1] && top[1] === top[2] && top[2] === top[3];
-        const near = !win && (top[0] === top[1] && top[1] === top[2]);
-        window._scratchDone = true;
-        const hint = document.getElementById("scratch-hint");
-        if (win) resolveScratchJackpot(hint);
-        else if (near) {
-            if (hint) hint.textContent = "SO CLOSE!!! 3 matched on top row...";
-            showToast("😭 Near miss! The foil knew.", 2800);
-            screenFlash("#ff3d9a");
-        } else {
-            if (hint) hint.textContent = "No line. L + ratio.";
-            grantChips(Math.max(1, Math.floor(window._scratchBet * 0.15)), "consolation");
+        // auto-finish when ~55% scratched
+        totalErased += Math.PI * 22 * 22;
+        if (totalErased > totalPixels * 0.55 && !window._scratchDone) {
+            autoRevealScratch();
         }
+    }
+
+    function onStart(e) { e.preventDefault(); scratching = true; const p = getPos(e); scratchAt(p.x, p.y); }
+    function onMove(e) { e.preventDefault(); if (scratching) { const p = getPos(e); scratchAt(p.x, p.y); } }
+    function onEnd() { scratching = false; }
+
+    canvas.addEventListener("pointerdown", onStart);
+    canvas.addEventListener("pointermove", onMove);
+    canvas.addEventListener("pointerup", onEnd);
+    canvas.addEventListener("pointerleave", onEnd);
+    canvas.addEventListener("touchstart", onStart, { passive: false });
+    canvas.addEventListener("touchmove", onMove, { passive: false });
+    canvas.addEventListener("touchend", onEnd);
+
+    window._scratchCleanup = () => { scratching = false; };
+}
+
+function autoRevealScratch() {
+    if (window._scratchDone) return;
+    window._scratchDone = true;
+    const canvas = document.getElementById("scratch-canvas");
+    if (canvas) {
+        const ctx = canvas.getContext("2d");
+        ctx.globalCompositeOperation = "destination-out";
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+    }
+    const top = (window._scratchGrid || []).slice(0, window._scratchCols || 4);
+    const win = top[0] === top[1] && top[1] === top[2] && top[2] === top[3];
+    const near = !win && (top[0] === top[1] && top[1] === top[2]);
+    const hint = document.getElementById("scratch-hint");
+    if (win) {
+        resolveScratchJackpot(hint);
+    } else if (near) {
+        if (hint) hint.textContent = "😭 SO CLOSE — 3 in a row but not 4!";
+        showToast("Near miss! The foil knew.", 2800);
+        screenFlash("#ff3d9a");
+        saveGame(); updateDisplay();
+        setTimeout(closeCasinoModal, 2400);
+    } else {
+        if (hint) hint.textContent = "No match. L + ratio.";
+        grantChips(Math.max(1, Math.floor((window._scratchBet || 1) * 0.15)), "consolation");
         saveGame(); updateDisplay();
         setTimeout(closeCasinoModal, 2400);
     }
-    canvas.addEventListener("pointerdown", e => { scratching = true; scratchAt(e.offsetX, e.offsetY); });
-    canvas.addEventListener("pointermove", e => { if (scratching) scratchAt(e.offsetX, e.offsetY); });
-    canvas.addEventListener("pointerup", () => { scratching = false; });
-    canvas.addEventListener("pointerleave", () => { scratching = false; });
-    window._scratchFinish = onEnd;
-    window._scratchCleanup = () => { scratching = false; window._scratchFinish = null; };
-}
-
-function finishScratch() {
-    if (window._scratchFinish) window._scratchFinish();
 }
 
 function resolveScratchJackpot(hint) {
@@ -603,7 +649,7 @@ function spinWheel(fromAd) {
         roll -= seg.weight;
         if (roll <= 0) { picked = seg; break; }
     }
-    const html = '<div class="wheel-wrap">' + premiumHTML("wheel", "wheel-premium", "Wheel") + '</div><p id="wheel-result" class="wheel-result">Spinning...</p>';
+    const html = '<div class="wheel-wrap"><div class="wheel-spinner-emoji" id="wheel-spinner">🎡</div></div><p id="wheel-result" class="wheel-result">Spinning...</p>';
     openCasinoModal("🎡 Lucky Wheel", html);
     sfxWhoosh();
     setTimeout(() => {

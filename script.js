@@ -182,33 +182,17 @@ function setIconNode(el, value, cls, label) {
     if (!el) return;
     el.innerHTML = iconOrTextHTML(value, cls, label);
 }
-const PREMIUM_ATLAS = { src: "assets/premium-atlas.png?v=1", cols: 6, rows: 4, cell: 256 };
-const PREMIUM_ICON = {
-    fart: 0, chip: 1, "casino-banner": 2, "scratch-frame": 3, "scratch-foil": 4, "mine-safe": 5,
-    "mine-bomb": 6, wheel: 7, crate: 8, "crate-open": 9, "skibidi-god": 10, shard: 11,
-    "sym-fart": 12, "sym-paw": 13, "sym-crown": 14, "sym-gem": 15,
-    "loot-box": 16, "mines-bg": 17, "golden-buff": 18, "aura-crystal": 19
-};
-function premiumHTML(key, cls, label) {
-    const idx = PREMIUM_ICON[key];
-    if (idx === undefined) return iconHTML("💨", cls, label);
-    const col = idx % PREMIUM_ATLAS.cols;
-    const row = Math.floor(idx / PREMIUM_ATLAS.cols);
-    return '<span class="premium-icon' + (cls ? " " + cls : "") + '" style="--px:' + col + ";--py:" + row + '" role="img" aria-label="' + escAttr(label || key) + '"></span>';
-}
 function applyChromeIcons() {
     const logo = document.querySelector(".logo-mini .logo-icon-img");
-    if (logo) logo.outerHTML = premiumHTML("fart", "logo-icon-img", "Fart Clicker");
+    if (logo) logo.outerHTML = iconHTML("💨", "logo-icon-img", "Fart Clicker");
     const main = document.querySelector(".main-icon-img");
-    if (main) main.outerHTML = premiumHTML("fart", "main-icon-img", "Click");
+    if (main) main.outerHTML = iconHTML("💨", "main-icon-img", "Click");
     const offline = document.querySelector(".offline-icon-img");
     if (offline) offline.outerHTML = iconHTML("💨", "offline-icon-img", "Offline stink");
-    [["upgrades","🛒"],["pets","🐾"],["worlds","🌍"],["aura","✦"]].forEach(([sheet, emoji]) => {
+    [["upgrades","🛒"],["pets","🐾"],["casino","💎"],["worlds","🌍"],["aura","✦"]].forEach(([sheet, emoji]) => {
         const wrap = document.querySelector('.nav-btn[data-sheet="' + sheet + '"] .nav-ico');
         if (wrap) wrap.innerHTML = iconHTML(emoji, "nav-icon-img", sheet);
     });
-    const casinoNav = document.querySelector('.nav-btn[data-sheet="casino"] .nav-ico');
-    if (casinoNav) casinoNav.innerHTML = premiumHTML("chip", "nav-icon-img", "Casino");
 }
 
 
@@ -1022,6 +1006,52 @@ const DRUM_VARIANTS = [
     { kicks: [1,0,0,1,0,0,1,0,1,0,0,1,0,0,1,0], hats: [1,0,1,0,1,1,0,1,1,0,1,0,1,1,0,1] },
     { kicks: [1,0,0,0,0,0,0,0,1,0,0,0,0,0,1,0], hats: [0,0,1,0,0,0,1,0,0,0,1,0,0,0,0,1] }
 ];
+// World music archetypes — each world-range has a distinct feel
+const WORLD_ARCHETYPES = [
+    // [bpm range, voice triple, drum density, filter, reverb, bass style]
+    { bpmBase: 65,  bpmRange: 8,  drums: 0, filter: 600,  rev: 0.55, bass: "soft"  }, // 0  Basement   — lo-fi slow
+    { bpmBase: 84,  bpmRange: 10, drums: 1, filter: 1400, rev: 0.30, bass: "groove" }, // 1  Sewer      — funky groove
+    { bpmBase: 96,  bpmRange: 8,  drums: 2, filter: 2200, rev: 0.20, bass: "808"   }, // 2  Skibidi    — upbeat phonk
+    { bpmBase: 80,  bpmRange: 12, drums: 1, filter: 1800, rev: 0.40, bass: "groove" }, // 3  Rizz Dojo  — chill R&B
+    { bpmBase: 72,  bpmRange: 10, drums: 0, filter: 1000, rev: 0.60, bass: "soft"  }, // 4  Ohio       — creepy folk
+    { bpmBase: 90,  bpmRange: 14, drums: 2, filter: 3000, rev: 0.15, bass: "808"   }, // 5  Outer Space — hard trap
+    { bpmBase: 76,  bpmRange: 8,  drums: 1, filter: 1600, rev: 0.35, bass: "groove" }, // 6  Gyatt Canyon
+    { bpmBase: 102, bpmRange: 10, drums: 2, filter: 2800, rev: 0.10, bass: "808"   }, // 7  Nether     — heavy metal-ish
+    { bpmBase: 95,  bpmRange: 12, drums: 1, filter: 2400, rev: 0.20, bass: "808"   }, // 8  Sigma City  — techno
+    { bpmBase: 68,  bpmRange: 16, drums: 0, filter: 800,  rev: 0.70, bass: "soft"  }, // 9  Dimension X — alien ambient
+    { bpmBase: 88,  bpmRange: 10, drums: 2, filter: 2600, rev: 0.18, bass: "808"   }, // 10 Quantum
+    { bpmBase: 100, bpmRange: 8,  drums: 2, filter: 3200, rev: 0.12, bass: "808"   }, // 11 Grimace
+    { bpmBase: 60,  bpmRange: 8,  drums: 0, filter: 700,  rev: 0.75, bass: "soft"  }, // 12 Mewing Heights — ethereal
+    { bpmBase: 108, bpmRange: 10, drums: 2, filter: 3500, rev: 0.08, bass: "808"   }, // 13 Inferno
+    { bpmBase: 72,  bpmRange: 12, drums: 1, filter: 1200, rev: 0.50, bass: "groove" }, // 14 Crystal
+    { bpmBase: 78,  bpmRange: 10, drums: 1, filter: 1400, rev: 0.40, bass: "groove" }, // 15 Mirror
+    { bpmBase: 85,  bpmRange: 14, drums: 2, filter: 2800, rev: 0.20, bass: "808"   }, // 16 Galactic
+    { bpmBase: 92,  bpmRange: 8,  drums: 2, filter: 3000, rev: 0.15, bass: "808"   }, // 17 Time Rift
+    { bpmBase: 112, bpmRange: 8,  drums: 2, filter: 3800, rev: 0.05, bass: "808"   }, // 18 Gigachad
+    { bpmBase: 120, bpmRange: 4,  drums: 2, filter: 4500, rev: 0.02, bass: "808"   }, // 19 Final Stench
+];
+const WORLD_VOICE_TRIPLES = [
+    ["pad","pluck","pulse"],       // 0  soft ambient
+    ["marimba","organ","bass808"], // 1  funky
+    ["ep","pulse","bass808"],      // 2  phonk
+    ["chime","strings","flute"],   // 3  R&B
+    ["marimba","pluck","bell"],    // 4  folk
+    ["pad","strings","bell"],      // 5  space
+    ["pluck","brass","marimba"],   // 6  canyon
+    ["organ","bass808","pulse"],   // 7  heavy
+    ["ep","bass808","pulse"],      // 8  techno
+    ["pad","flute","chime"],       // 9  alien
+    ["ep","bell","strings"],       // 10 quantum
+    ["organ","pulse","bass808"],   // 11 grimace
+    ["pad","flute","chime"],       // 12 clouds
+    ["brass","bass808","pulse"],   // 13 inferno
+    ["chime","bell","pluck"],      // 14 crystal
+    ["ep","strings","flute"],      // 15 mirror
+    ["pad","strings","brass"],     // 16 galactic
+    ["chime","pluck","organ"],     // 17 time
+    ["bass808","brass","pulse"],   // 18 gigachad
+    ["marimba","strings","brass"], // 19 final
+];
 function transposeMelodies(melodies, semitones) {
     const st = semitones || 0;
     return melodies.map(row => row.map(n => (n === null || n === undefined) ? n : n + st));
@@ -1029,22 +1059,37 @@ function transposeMelodies(melodies, semitones) {
 function buildWorldTrackSets() {
     const sets = [];
     for (let w = 0; w < 20; w++) {
+        const arc = WORLD_ARCHETYPES[w] || WORLD_ARCHETYPES[0];
+        const voices = WORLD_VOICE_TRIPLES[w] || WORLD_VOICE_TRIPLES[0];
         const tracks = [];
         for (let t = 0; t < 3; t++) {
-            const src = WORLD_SONGS[(w * 3 + t * 11 + w * t) % WORLD_SONGS.length];
-            const drums = DRUM_VARIANTS[(w + t) % DRUM_VARIANTS.length];
-            const keyShift = (w * 2 + t * 5) % 12 - 6;
-            const bpm = WORLD_BPM_TRIPLES[w][t] + ((w + t) % 3) * 4 - 4;
+            // Each track in a world picks a *different* source song guaranteed
+            const srcIdx = (w + t * 7) % WORLD_SONGS.length;
+            const src = WORLD_SONGS[srcIdx];
+            const drums = DRUM_VARIANTS[(arc.drums + t) % DRUM_VARIANTS.length];
+            // BPM: base + per-track variation (+0, +6, -4 = slow/med/fast)
+            const bpmOffsets = [0, 6, -4];
+            const bpm = Math.max(55, Math.min(130, arc.bpmBase + (w % arc.bpmRange) + bpmOffsets[t]));
+            // Key: each track in world uses a genuinely different key centre
+            const keyOffsets = [0, 5, 9]; // tonic, subdominant, relative
+            const key = src.key + keyOffsets[t] + Math.floor(w / 4) * 2;
+            // Melody density: higher worlds have denser melodies
+            const density = Math.min(1 + w * 0.06, 2.5);
+            // Filter opens up in later worlds
+            const filter = arc.filter + t * 200 + w * 15;
             tracks.push({
                 name: WORLD_TRACK_NAMES[w][t],
-                bpm: Math.max(58, Math.min(112, bpm)),
-                key: src.key + keyShift,
-                voice: WORLD_VOICE_POOLS[w][t],
-                progs: src.progs.map(bar => bar.map(n => n + (w % 3) * 2)),
-                melodies: transposeMelodies(src.melodies, keyShift + t * 2),
+                bpm,
+                key,
+                voice: voices[t],
+                progs: src.progs,
+                melodies: transposeMelodies(src.melodies, keyOffsets[t]),
                 kicks: drums.kicks,
                 hats: drums.hats,
-                worldFilter: 900 + w * 90 + t * 120
+                worldFilter: Math.min(filter, 5000),
+                density,
+                reverb: arc.rev,
+                bassStyle: arc.bass,
             });
         }
         sets.push(tracks);
@@ -1117,10 +1162,33 @@ function phonkTick() {
         if (master) playVoice(ctx, t, song.voice, freq, vol, master);
     }
 
-    // bass on beat 1 and 3 of bar
+    // bass on beat 1 and 3 of bar — style varies by archetype
     if (s === 0 || s === 8) {
-        const master = ensureMaster(); if (master)
-            vBass(ctx, t, midiHz(root - 12), 0.28 * drumVol, master);
+        const master = ensureMaster(); if (master) {
+            const bassFreq = midiHz(root - 12);
+            const bassVol = 0.30 * drumVol;
+            if (song.bassStyle === "808") vBass808(ctx, t, bassFreq, bassVol, master);
+            else if (song.bassStyle === "groove") {
+                vBass(ctx, t, bassFreq, bassVol, master);
+                if (s === 8) vBass(ctx, t + (60 / song.bpm / 2), midiHz(root - 12 + 2), bassVol * 0.7, master);
+            } else {
+                vBass(ctx, t, bassFreq, bassVol * 0.75, master);
+            }
+        }
+    }
+
+    // Extra melody layer for denser worlds
+    const density = song.density || 1;
+    if (density > 1.5 && s % 4 === 2) {
+        const master = ensureMaster();
+        if (master) {
+            const mel2 = song.melodies[1] || song.melodies[0];
+            const note2 = mel2[(s + 2) % 16];
+            if (note2 !== null && note2 !== undefined) {
+                const secondVoice = song.voice === "pad" ? "pluck" : (song.voice === "marimba" ? "chime" : "pluck");
+                playVoice(ctx, t, secondVoice, midiHz(note2 + root + 12), 0.055 * game.settings.musicVol * (density - 1), master);
+            }
+        }
     }
 
     PHONK.step++;
