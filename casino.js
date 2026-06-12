@@ -52,9 +52,16 @@ function freshCasinoState() {
         auraTaxStacks: 0,
         minesActive: false,
         minesCooldownUntil: 0,
-        crateKeys: 0
+        crateKeys: 0,
+        casinoStreak: 0,
+        lastCasinoDay: "",
+        highRoller: false,
+        minesFlags: []
     };
 }
+
+let minesFlagMode = false;
+let _crateSkipTimer = null;
 
 function chipPrice(kind) {
     const w = peakWorld();
@@ -95,7 +102,33 @@ function registerGamble() {
     c.dailyGambles++;
     c.sessionGambles++;
     c.auraTaxStacks = Math.min(8, (c.auraTaxStacks || 0) + 1);
+    const today = new Date().toDateString();
+    if (c.lastCasinoDay !== today) {
+        const yesterday = new Date(Date.now() - 86400000).toDateString();
+        if (c.lastCasinoDay === yesterday) c.casinoStreak = (c.casinoStreak || 0) + 1;
+        else c.casinoStreak = 1;
+        c.lastCasinoDay = today;
+        const bonus = Math.min(20, (c.casinoStreak || 1) * 2);
+        grantChips(bonus, "casino streak");
+        showToast("🎰 Casino streak day " + c.casinoStreak + " · +" + bonus + " chips", 2400);
+    }
     if (typeof trackStat === "function") trackStat("gambles", 1);
+}
+
+function highRollerUnlocked() {
+    return (game.rebirths || 0) >= 50 || isAdminMode();
+}
+
+function toggleHighRoller() {
+    if (!highRollerUnlocked()) { showToast("🔒 Need 50 rebirths for High-Roller Room", 2500); return; }
+    const c = ensureCasino();
+    c.highRoller = !c.highRoller;
+    if (c.highRoller && (game.aura || 0) > 0) {
+        const tax = Math.max(1, Math.floor(game.aura * 0.05));
+        game.aura = Math.max(0, game.aura - tax);
+        showToast("✦ Aura tax: -" + tax + " (better odds active)", 2800);
+    }
+    saveGame(); updateDisplay(); renderCasino();
 }
 
 function casinoPassiveMult() {
@@ -194,6 +227,12 @@ function renderCasino() {
         (c.secretShards >= 10
             ? '<button class="casino-shard-btn" onclick="redeemSecretShards()">💎 Redeem 10 Shards → Secret Pet</button>'
             : '<p class="casino-shard-hint">Jackpots drop 💎 shards · 10 = guaranteed secret pet</p>') +
+        (highRollerUnlocked()
+            ? '<button class="casino-shard-btn high-roller-card" onclick="toggleHighRoller()">' +
+              (c.highRoller ? "🎩 High-Roller ON · Aura tax active" : "🎩 Enter High-Roller Room (50+ rebirths)") +
+              '</button>'
+            : '') +
+        (c.casinoStreak > 1 ? '<div class="casino-streak-pill">🔥 Casino streak: ' + c.casinoStreak + ' days</div>' : '') +
         '<p class="casino-disclaimer">⚠️ Chips are scarce. Near-misses intentional. Gambling taxes Aura rebirth.</p>';
 }
 
@@ -275,10 +314,12 @@ function startScratchCanvas(betChips) {
     const symHtml = '<div class="scratch-sym-grid" id="scratch-sym-grid">' +
         grid.map(s => '<div class="scratch-sym">' + s + '</div>').join("") + '</div>';
 
+    const autoCost = betChips * 2;
     const html = '<div class="scratch-touch-pad" id="scratch-touch-pad"><div class="scratch-outer">' + symHtml +
         '<canvas id="scratch-canvas" width="320" height="240" class="scratch-foil-canvas"></canvas>' +
         '</div></div>' +
-        '<p class="scratch-hint" id="scratch-hint">👆 Scratch anywhere — edges are forgiving!</p>';
+        '<p class="scratch-hint" id="scratch-hint">👆 Scratch anywhere — edges are forgiving!</p>' +
+        '<div class="scratch-auto-row"><button class="casino-shard-btn" onclick="autoScratchReveal()">⚡ Auto-scratch · ' + autoCost + ' ' + chipIcon() + ' (2×)</button></div>';
     openCasinoModal("🎫 Dank Scratch", html);
     window._scratchGrid = grid;
     window._scratchBet = betChips;
@@ -434,6 +475,8 @@ function autoRevealScratch() {
     if (win) {
         resolveScratchJackpot(hint);
     } else if (near) {
+        const grid = document.getElementById("scratch-sym-grid");
+        if (grid) grid.classList.add("near-miss");
         if (hint) hint.textContent = "😭 SO CLOSE — 3 in a row but not 4!";
         showToast("Near miss! The foil knew.", 2800);
         screenFlash("#ff3d9a");
@@ -445,6 +488,19 @@ function autoRevealScratch() {
         saveGame(); updateDisplay();
         casinoDefer(sess, closeCasinoModal, 2400);
     }
+}
+
+function autoScratchReveal() {
+    if (window._scratchDone) return;
+    const cost = (window._scratchBet || chipPrice("scratch")) * 2;
+    if (!spendChips(cost)) { sfxError(); showToast("Need " + cost + " chips for auto-scratch!", 2000); return; }
+    const canvas = document.getElementById("scratch-canvas");
+    if (canvas) {
+        const ctx = canvas.getContext("2d");
+        ctx.globalCompositeOperation = "destination-out";
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+    }
+    autoRevealScratch();
 }
 
 function resolveScratchJackpot(hint) {
@@ -493,20 +549,32 @@ function startMines() {
     const mineSet = new Set();
     while (mineSet.size < mines) mineSet.add(Math.floor(Math.random() * cells));
     c.minesState = { size, mines: mineSet, revealed: [], mult: 1, bet: cost, alive: true };
+    c.minesFlags = [];
+    minesFlagMode = false;
     saveGame(); updateDisplay();
+    renderMinesBoard();
+}
+
+function toggleMinesFlagMode() {
+    minesFlagMode = !minesFlagMode;
     renderMinesBoard();
 }
 
 function renderMinesBoard() {
     const st = ensureCasino().minesState;
     if (!st) return;
-    let html = '<div class="mines-hud">Mult: <b id="mines-mult">x' + st.mult.toFixed(2) + '</b> · Mines: ' + st.mines.size + '</div>' +
+    const flags = ensureCasino().minesFlags || [];
+    let html = '<div class="mines-flag-bar">' +
+        '<button class="' + (minesFlagMode ? "active" : "") + '" onclick="toggleMinesFlagMode()">🚩 Flag mode' + (minesFlagMode ? " ON" : "") + '</button>' +
+        '<span class="meta-hint">Tap tiles to place flags</span></div>' +
+        '<div class="mines-hud">Mult: <b id="mines-mult">x' + st.mult.toFixed(2) + '</b> · Mines: ' + st.mines.size + '</div>' +
         '<div class="mines-grid">';
     for (let i = 0; i < st.size * st.size; i++) {
         const rev = st.revealed.indexOf(i) >= 0;
+        const flagged = flags.indexOf(i) >= 0;
         const isMine = st.mines.has(i);
-        let inner = "?";
-        let cls = "mine-tile";
+        let inner = flagged ? "" : "?";
+        let cls = "mine-tile" + (flagged ? " flagged" : "");
         if (rev) {
             cls += isMine ? " boom" : " safe";
             inner = isMine ? "💣" : "💎";
@@ -521,6 +589,14 @@ function pickMine(i) {
     const c = ensureCasino();
     const st = c.minesState;
     if (!st || !st.alive || st.revealed.indexOf(i) >= 0) return;
+    if (minesFlagMode) {
+        c.minesFlags = c.minesFlags || [];
+        const idx = c.minesFlags.indexOf(i);
+        if (idx >= 0) c.minesFlags.splice(idx, 1);
+        else c.minesFlags.push(i);
+        renderMinesBoard();
+        return;
+    }
     st.revealed.push(i);
     if (st.mines.has(i)) {
         st.alive = false;
@@ -580,9 +656,11 @@ function openCrate() {
     const won = rollCrateItem(false);
     const near = won.tier < 5 && Math.random() < 0.34;
     const strip = buildCrateStrip(won, near);
+    window._cratePendingWin = won;
     const html = '<div class="crate-stage">📦</div>' +
         '<div class="crate-viewport"><div class="crate-marker"></div><div class="crate-strip" id="crate-strip"></div></div>' +
-        '<p class="crate-status" id="crate-status">Opening...</p>';
+        '<p class="crate-status" id="crate-status">Opening...</p>' +
+        '<button class="crate-skip-btn" onclick="skipCrateAnimation()">⏭ Skip to result</button>';
     openCasinoModal("📦 Brainrot Crate", html);
     const stripEl = document.getElementById("crate-strip");
     stripEl.innerHTML = strip.map(it =>
@@ -590,7 +668,17 @@ function openCrate() {
     ).join("");
     animateCrateStrip(stripEl, 28, 5.5);
     sfxWhoosh();
-    casinoDefer(casinoSession, () => resolveCrateWin(won), 5600);
+    if (_crateSkipTimer) clearTimeout(_crateSkipTimer);
+    _crateSkipTimer = setTimeout(() => { _crateSkipTimer = null; resolveCrateWin(won); }, 5600);
+}
+
+function skipCrateAnimation() {
+    const won = window._cratePendingWin;
+    if (!won) return;
+    if (_crateSkipTimer) { clearTimeout(_crateSkipTimer); _crateSkipTimer = null; }
+    const stripEl = document.getElementById("crate-strip");
+    if (stripEl) { stripEl.style.transition = "none"; }
+    resolveCrateWin(won);
 }
 
 function animateCrateStrip(stripEl, winIdx, durationSec) {
@@ -611,13 +699,16 @@ function animateCrateStrip(stripEl, winIdx, durationSec) {
 
 function rollCrateItem(forceGod) {
     if (forceGod) return CRATE_TABLE[5];
-    const total = CRATE_TABLE.reduce((s, x) => s + x.weight, 0);
+    const table = ensureCasino().highRoller
+        ? CRATE_TABLE.map((it, i) => i >= 2 ? Object.assign({}, it, { weight: it.weight * (i >= 4 ? 2.5 : 1.6) }) : it)
+        : CRATE_TABLE;
+    const total = table.reduce((s, x) => s + x.weight, 0);
     let roll = Math.random() * total;
-    for (const it of CRATE_TABLE) {
+    for (const it of table) {
         roll -= it.weight;
         if (roll <= 0) return it;
     }
-    return CRATE_TABLE[0];
+    return table[0];
 }
 
 function buildCrateStrip(won, nearMiss) {

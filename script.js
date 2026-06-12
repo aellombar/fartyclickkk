@@ -26,13 +26,16 @@ function freshGameState() {
         peakWorldIdx: 0,
         casino: null,
         meta: null,
+        features: null,
         ascension: 0,
         lastSeen: Date.now(),
         settings: {
             musicVol: 0.35, sfxVol: 0.70,
             musicOn: true, particles: true, screenShake: true, brainrot: true,
             platform: null, platformChosen: false,
-            performanceMode: false, reduceUiAnim: false
+            performanceMode: false, reduceUiAnim: false,
+            compactHud: false, rebirthExpanded: false, haptics: false,
+            particlesLite: false, uiScale: 1
         }
     };
 }
@@ -625,6 +628,15 @@ function sfxWhoosh() { tone(300, 0.25, "sine", 0.06, 1200); }
 function sfxRare(tier) {
     const notes = [523,659,784,1047,1319,1568];
     for (let i = 0; i <= Math.min(tier+1,5); i++) setTimeout(()=>tone(notes[i],0.25,"sine",0.10),i*100);
+}
+function sfxHatchTier(tier) {
+    if (tier <= 0) { tone(440, 0.12, "sine", 0.08); return; }
+    if (tier === 1) { tone(523, 0.15, "triangle", 0.09); setTimeout(() => tone(659, 0.12, "sine", 0.07), 80); return; }
+    if (tier === 2) { sfxRare(1); return; }
+    if (tier === 3) { tone(392, 0.2, "sawtooth", 0.06); setTimeout(() => sfxRare(2), 120); return; }
+    if (tier === 4) { sfxRare(3); setTimeout(() => tone(1568, 0.3, "sine", 0.12), 200); return; }
+    if (tier >= 5) { sfxRare(5); setTimeout(() => tone(196, 0.4, "square", 0.05, 80), 100); return; }
+    sfxRare(tier);
 }
 
 
@@ -1529,6 +1541,7 @@ function sanitizeGameState() {
     });
     initUpgrades();
     if (typeof ensureMeta === "function") ensureMeta();
+    if (typeof ensureFeatures === "function") ensureFeatures();
     if (!game.settings.platformChosen) {
         if (!game.settings.platform) game.settings.platform = null;
         if (typeof game.settings.performanceMode !== "boolean") game.settings.performanceMode = false;
@@ -1630,6 +1643,8 @@ function handleMainClick(e) {
     if (isNaN(dmg) || dmg < 0) dmg = 1;
     game.points += dmg; game.totalEarned += dmg;
     if (typeof invasionClick === "function") invasionClick(dmg);
+    if (typeof hapticTap === "function") hapticTap("click");
+    if (typeof addSeasonXp === "function") addSeasonXp(1);
 
     sfxClick();
     const w = WORLDS[game.worldIdx || 0];
@@ -1828,7 +1843,11 @@ function applyPerformanceProfile() {
     const orbit = document.querySelector(".btn-orbit");
     if (orbit) orbit.style.display = perf ? "none" : "";
     const po = document.getElementById("particle-overlay");
-    if (po) po.style.display = game.settings.particles ? "block" : "none";
+  if (po) {
+        const pm = typeof particleMode === "function" ? particleMode() : (game.settings.particles ? "full" : "off");
+        po.style.display = pm === "off" ? "none" : "block";
+        po.classList.toggle("particles-lite", pm === "lite");
+    }
     if (perf && game.settings.reduceUiAnim) root.classList.add("reduce-ui-anim");
     else root.classList.remove("reduce-ui-anim");
 }
@@ -1867,7 +1886,7 @@ function toggleSetting(key, btn) {
     const pill = btn.querySelector(".toggle-pill");
     if (pill) { pill.innerText = game.settings[key] ? "ON" : "OFF"; btn.classList.toggle("off", !game.settings[key]); }
     if (key === "musicOn") { game.settings.musicOn ? startAudio() : stopMusic(); }
-    if (key === "particles") { const o=document.getElementById("particle-overlay"); if(o)o.style.display=game.settings.particles?"block":"none"; }
+    if (key === "particles" || key === "particlesLite") applyPerformanceProfile();
     if (key === "performanceMode" || key === "reduceUiAnim") applyPerformanceProfile();
     saveGame();
 }
@@ -1880,11 +1899,18 @@ function syncSettingsUI() {
     const platEl = document.getElementById("platform-label");
     if (platEl) platEl.textContent = game.settings.platform === "mobile" ? "📱 Mobile" : (game.settings.platform === "desktop" ? "💻 PC" : "Not set");
     [["tg-music","musicOn"],["tg-particles","particles"],["tg-shake","screenShake"],["tg-brainrot","brainrot"],
-     ["tg-perf","performanceMode"],["tg-reduce-ui","reduceUiAnim"]].forEach(([id,k])=>{
+     ["tg-perf","performanceMode"],["tg-reduce-ui","reduceUiAnim"],["tg-compact","compactHud"],
+     ["tg-haptics","haptics"],["tg-lite-particles","particlesLite"]].forEach(([id,k])=>{
         const b=document.getElementById(id); if(!b)return; const p=b.querySelector(".toggle-pill");
         if(p)p.innerText=game.settings[k]?"ON":"OFF"; b.classList.toggle("off",!game.settings[k]);
     });
     renderSaveSlotsUI();
+    const us = document.getElementById("ui-scale");
+    if (us) us.value = Math.round((game.settings.uiScale || 1) * 100);
+    const usv = document.getElementById("ui-scale-val");
+    if (usv) usv.textContent = Math.round((game.settings.uiScale || 1) * 100) + "%";
+    if (typeof applyCompactHud === "function") applyCompactHud();
+    if (typeof applyRebirthPill === "function") applyRebirthPill();
 }
 function renderSaveSlotsUI() {
     const wrap = document.getElementById("save-slots-wrap");
@@ -2126,17 +2152,19 @@ function buyAura(i) {
 // ============================================================
 //  PETS SHEET (tabs: collection / fuse / index)
 // ============================================================
-function renderPetSheet() {
-    if (petTabCur === "collection") renderPets();
-    else if (petTabCur === "fuse") renderFuse();
-    else if (petTabCur === "jobs" && typeof renderPetJobs === "function") renderPetJobs();
-    else renderIndex();
-}
 function showPetTab(name, btn) {
     petTabCur = name;
     document.querySelectorAll("#sheet-pets .stab").forEach(b => b.classList.remove("active"));
     if (btn) btn.classList.add("active");
     renderPetSheet();
+}
+
+function renderPetSheet() {
+    if (petTabCur === "collection") renderPets();
+    else if (petTabCur === "fuse") renderFuse();
+    else if (petTabCur === "jobs" && typeof renderPetJobs === "function") renderPetJobs();
+    else if (petTabCur === "teams" && typeof renderLoadoutsTab === "function") renderLoadoutsTab();
+    else renderIndex();
 }
 
 
@@ -2148,7 +2176,7 @@ function petChip(p, equipped) {
     if (p.trait) tags += '<span class="pet-tag trait">🧬</span>';
     return '<div class="pet-chip ' + (equipped?"equipped":"") + (p.shiny?" pet-shiny":"") + '" style="border-color:' + r.color + ';color:' + r.color + '" onclick="openPetModal(' + p.id + ')">' +
         '<span class="pet-chip-emoji">' + iconHTML(p.emoji||"🐾", "pet-icon-img", p.name) + '</span>' + stars + tags +
-        '<span class="pet-chip-name">' + p.name + '</span>' +
+        '<span class="pet-chip-name">' + (typeof petDisplayName === "function" ? petDisplayName(p) : p.name) + '</span>' +
         '<span class="pet-chip-pow">' + p.power.toFixed(2) + 'x</span>' +
         (equipped?'<span class="pet-chip-badge">✓</span>':'') + '</div>';
 }
@@ -2321,6 +2349,7 @@ function openPetModal(id) {
         '<div class="pet-modal-row">Status <b>' + (equipped?"✅ Equipped":"Not equipped") + '</b></div>';
     const b = document.getElementById("equip-btn"); if (b) b.innerText = equipped ? "Unequip" : "Equip";
     const m = document.getElementById("pet-modal"); if (m) m.classList.remove("hidden");
+    if (typeof renderPetExtrasInModal === "function") renderPetExtrasInModal(p);
 }
 function closePetModal() { const m=document.getElementById("pet-modal"); if(m)m.classList.add("hidden"); selectedPetId=null; }
 function equipPet() {
@@ -2515,9 +2544,12 @@ function renderEggShop() {
         html += '<div class="meme-week-banner">🔥 Meme of the Week: <b>' + meme.emoji + " " + meme.name +
             '</b> — ~3.5% hatch chance · <span class="meme-timer">' + daysLeft + 'd left</span></div>';
     }
+    html += '<div id="pity-meter" class="pity-meter-wrap"></div>';
     html += '<div class="egg-grid">';
+    const memeArt = typeof memeEggEmoji === "function" ? memeEggEmoji() : null;
     getEggTemplates().forEach((egg, idx) => {
         const cost = eggCost(egg, game.worldIdx), ok = game.points >= cost;
+        const eggIcon = memeArt && idx === 0 ? memeArt : egg.emoji;
         let odds = egg.pets.map(p => { const r=RARITY[p.rarity];
             return '<div class="odds-row"><span style="color:' + r.color + '">' + iconHTML(p.emoji, "odds-icon-img", p.name) + ' ' + p.name + '</span><span class="odds-pct">' + p.odds + '%</span></div>'; }).join("");
         let multiBtns = '';
@@ -2529,8 +2561,8 @@ function renderEggShop() {
             const ok10 = game.points >= cost * 10;
             multiBtns += '<button class="egg-buy-multi mega' + (ok10 ? '' : ' locked') + '" onclick="rollEggMulti(' + idx + ',10)">x10 · ' + fmt(cost * 10) + '</button>';
         }
-        html += '<div class="egg-card" style="border-color:' + egg.color + '">' +
-            '<div class="egg-emoji" style="filter:drop-shadow(0 0 12px ' + egg.color + ')">' + iconHTML(egg.emoji, "egg-icon-img", egg.name) + '</div>' +
+        html += '<div class="egg-card egg-skin-w' + (game.worldIdx || 0) + '" style="border-color:' + egg.color + '">' +
+            '<div class="egg-emoji" style="filter:drop-shadow(0 0 12px ' + egg.color + ')">' + iconHTML(eggIcon, "egg-icon-img", egg.name) + '</div>' +
             '<div class="egg-name" style="color:' + egg.color + '">' + egg.name + '</div>' +
             '<div class="egg-odds">' + odds + '</div>' +
             '<button class="egg-buy ' + (ok?"":"locked") + '" onclick="rollEgg(' + idx + ')">Open · ' + fmt(cost) + '</button>' +
@@ -2538,6 +2570,7 @@ function renderEggShop() {
     });
     html += '</div>';
     const sel = document.getElementById("egg-selection"); if (sel) sel.innerHTML = html;
+    if (typeof renderPityMeter === "function") renderPityMeter();
 }
 function rollEggMulti(idx, count) {
     const egg = getEggTemplates()[idx]; if (!egg) return;
@@ -2638,7 +2671,7 @@ function playHatchTurbo(pet, egg) {
         eggEl.style.opacity = "0";
         if (tier >= 2) { screenFlash(r.color); shockwave(r.color); }
         if (tier >= 4) shake();
-        sfxRare(Math.min(tier, 4));
+        sfxHatchTier(tier);
         if (tier >= 1) spawnConfetti(r.color, 6 + tier * 3);
 
         hatchDelay(() => {
@@ -2679,6 +2712,13 @@ function commitHatchPet(pet) {
         }
         if (typeof maybeRefreshQuests === "function") maybeRefreshQuests();
     }
+    if (typeof bumpPity === "function") bumpPity(pet.rarity);
+    if (typeof hapticTap === "function") {
+        const tier = (RARITY[pet.rarity] || RARITY.common).tier;
+        hapticTap(tier >= 4 ? "rare" : "hatch");
+    }
+    if (typeof renderPityMeter === "function") renderPityMeter();
+    if (typeof updateHubNavBadge === "function") updateHubNavBadge();
 }
 
 function playHatch(pet, egg) {
@@ -2784,7 +2824,7 @@ function playHatch(pet, egg) {
         shockwave(r.color);
         hatchBurstFX(r.color, tier, pet.emoji || egg.emoji);
         spawnConfetti(r.color, 25 + tier * 45);
-        sfxRare(tier);
+        sfxHatchTier(tier);
 
         if (tier >= 1) screenFlash(r.color);
         if (tier >= 2) {
@@ -3206,6 +3246,9 @@ function updateDisplay() {
         else ascBadge.classList.add("hidden");
     }
     if (typeof renderInvasionHud === "function") renderInvasionHud();
+    if (typeof updateCompactHudLine === "function") updateCompactHudLine();
+    if (typeof updateHubNavBadge === "function") updateHubNavBadge();
+    if (typeof renderShowcasePet === "function") renderShowcasePet();
     const rb = byId("rebirth-btn");
     if (rb) {
         const cost = getRebirthCost();
@@ -3273,6 +3316,8 @@ function initGame() {
     startAmbientEffects();
     addCornerGlows();
     if (typeof initMeta === "function") initMeta();
+    if (typeof initFeatures === "function") initFeatures();
+    if (typeof updateHubNavBadge === "function") updateHubNavBadge();
     maybeShowPlatformPicker();
 }
 
@@ -3306,7 +3351,9 @@ function updateCornerGlows() {
 
 // Floating orbs that drift slowly across the screen
 function spawnAmbOrb() {
-    if (!pageVisible || !game.settings.particles || isPerformanceMode() || fxNodeCount >= fxSoftLimit()) return;
+    const pm = typeof particleMode === "function" ? particleMode() : "full";
+    if (!pageVisible || pm === "off" || isPerformanceMode() || fxNodeCount >= fxSoftLimit()) return;
+    if (pm === "lite" && Math.random() > 0.35) return;
     const colors = getWorldColors();
     const el = document.createElement("div");
     el.className = "amb-orb";
