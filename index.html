@@ -127,6 +127,14 @@
                 <button class="toggle-row" id="tg-shake" onclick="toggleSetting('screenShake', this)"><span>📳 Screen Shake</span><span class="toggle-pill">ON</span></button>
                 <button class="toggle-row" id="tg-brainrot" onclick="toggleSetting('brainrot', this)"><span>🧠 Brainrot Mode</span><span class="toggle-pill">ON</span></button>
             </div>
+            <div class="set-group code-group">
+                <label class="set-row"><span>🎁 Codes</span><span class="set-val">Rewards</span></label>
+                <div class="code-row">
+                    <input id="code-input" class="code-input" type="text" placeholder="Enter code" autocomplete="off">
+                    <button class="set-action code-submit" onclick="redeemCode()">Redeem</button>
+                </div>
+                <p id="code-status" class="code-status">Try release or admin.</p>
+            </div>
             <div class="set-group">
                 <button class="set-action" onclick="exportSave()">📤 Export Save</button>
                 <button class="set-action" onclick="importSave()">📥 Import Save</button>

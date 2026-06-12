@@ -20,6 +20,7 @@ function freshGameState() {
         aura: 0,
         auraUpgrades: {},
         discovered: {},
+        redeemedCodes: {},
         lastSeen: Date.now(),
         settings: {
             musicVol: 0.35, sfxVol: 0.70,
@@ -323,7 +324,15 @@ WORLD_PET_THEMES.forEach((t, i) => {
 // Current world's egg templates
 function getEggTemplates() { return WORLD_EGGS[game.worldIdx] || WORLD_EGGS[0]; }
 
-function eggCost(t, world) { return Math.floor(t.baseCost * Math.pow(t.growth, world)); }
+function eggCost(t, world) {
+    const w = Math.max(0, world || 0);
+    const base = t.baseCost * Math.pow(t.growth, w);
+    const unlockReq = (WORLDS[w] && WORLDS[w].reqRebirths) || 0;
+    const unlockPressure = 1 + unlockReq / 20;
+    const lateWorldPressure = Math.pow(1.55, (w * w) / 9);
+    const tierPressure = t.id === "legendary" ? (1 + w * 0.35) : (t.id === "rare" ? (1 + w * 0.18) : 1);
+    return Math.floor(base * unlockPressure * lateWorldPressure * tierPressure);
+}
 // pet power: flatter base values, gentler world scaling
 function petPower(base, world) { return +(Math.sqrt(base) * Math.pow(1.15, world)).toFixed(2); }
 function rollBestFromEgg(egg) {
@@ -952,6 +961,7 @@ function sanitizeGameState() {
     if (typeof game.rebirths !== "number" || game.rebirths < 0) game.rebirths = 0;
     if (typeof game.aura !== "number" || isNaN(game.aura) || game.aura < 0) game.aura = 0;
     if (!game.auraUpgrades || typeof game.auraUpgrades !== "object") game.auraUpgrades = {};
+    if (!game.redeemedCodes || typeof game.redeemedCodes !== "object") game.redeemedCodes = {};
     AURA_UPGRADES.forEach((u, i) => {
         let lvl = game.auraUpgrades[i] || 0;
         if (typeof lvl !== "number" || isNaN(lvl) || lvl < 0) lvl = 0;
@@ -1088,16 +1098,29 @@ function bulkInfo(i) {
     const cur = game.upgrades[i] || 0;
     let count = 0, total = 0;
     const cap = (buyMode === "max") ? 100000 : buyMode;
-    let pts = game.points;
+    if (buyMode === "max") {
+        const first = levelCost(i, cur);
+        if (!isFinite(first) || first <= 0 || game.points < first) return { count: 0, total: first, affordable: false };
+        const growth = 1.15;
+        count = Math.min(cap, Math.max(1, Math.floor(Math.log(game.points * (growth - 1) / first + 1) / Math.log(growth))));
+        total = first * (Math.pow(growth, count) - 1) / (growth - 1);
+        while (count > 0 && total > game.points) {
+            count--;
+            total = first * (Math.pow(growth, count) - 1) / (growth - 1);
+        }
+        while (count < cap) {
+            const nextTotal = first * (Math.pow(growth, count + 1) - 1) / (growth - 1);
+            if (nextTotal > game.points) break;
+            count++;
+            total = nextTotal;
+        }
+        return { count: count, total: Math.floor(total), affordable: count > 0 };
+    }
     for (let k = 0; k < cap; k++) {
         const c = levelCost(i, cur + k);
-        if (buyMode === "max") { if (pts < c) break; pts -= c; }
         total += c; count++;
     }
-    if (buyMode !== "max") { // fixed mode: affordable only if can pay full batch
-        return { count: count, total: total, affordable: game.points >= total };
-    }
-    return { count: count, total: total, affordable: count > 0 };
+    return { count: count, total: total, affordable: game.points >= total };
 }
 function upCard(i) {
     const u = UPGRADES[i], lvl = game.upgrades[i] || 0;
@@ -1212,6 +1235,85 @@ function syncSettingsUI() {
         const b=document.getElementById(id); if(!b)return; const p=b.querySelector(".toggle-pill");
         if(p)p.innerText=game.settings[k]?"ON":"OFF"; b.classList.toggle("off",!game.settings[k]);
     });
+}
+function setCodeStatus(text, ok) {
+    const el = document.getElementById("code-status");
+    if (el) {
+        el.textContent = text;
+        el.classList.toggle("ok", !!ok);
+        el.classList.toggle("bad", !ok);
+    }
+}
+function secretPetForCurrentWorld() {
+    const pets = allPetsForWorld(game.worldIdx || 0);
+    return pets.find(p => p.rarity === "secret") || pets[pets.length - 1];
+}
+function grantPetFromTemplate(template) {
+    if (!template) return null;
+    const pet = {
+        id: Date.now() + Math.floor(Math.random() * 100000),
+        name: template.name,
+        emoji: template.emoji,
+        rarity: template.rarity || "secret",
+        star: 0,
+        power: petPower(template.base || 120, game.worldIdx || 0)
+    };
+    game.pets.push(pet);
+    game.discovered[dexKey(game.worldIdx || 0, pet.name)] = true;
+    return pet;
+}
+function refreshRewardViews() {
+    updateDisplay();
+    if (sheetOpen("upgrades")) renderUpgradeTabs();
+    if (sheetOpen("pets")) renderPetSheet();
+    const eggModal = document.getElementById("egg-modal");
+    if (eggModal && !eggModal.classList.contains("hidden")) renderEggShop();
+}
+function redeemCode() {
+    const input = document.getElementById("code-input");
+    const raw = input ? input.value : "";
+    const code = raw.trim().toLowerCase();
+    if (!code) { setCodeStatus("Enter a code first.", false); return; }
+
+    if (code === "release") {
+        const world = game.worldIdx || 0;
+        const key = "release:" + world;
+        if (game.redeemedCodes[key]) {
+            setCodeStatus("release was already redeemed in this world.", false);
+            sfxError();
+            return;
+        }
+        const template = secretPetForCurrentWorld();
+        const pet = grantPetFromTemplate(template);
+        if (!pet) { setCodeStatus("No secret pet found for this world.", false); sfxError(); return; }
+        game.redeemedCodes[key] = Date.now();
+        if (input) input.value = "";
+        sfxRare(5);
+        burstAt(window.innerWidth / 2, window.innerHeight * 0.42, (RARITY[pet.rarity] || RARITY.secret).color, 45);
+        showToast("🎁 release: " + pet.name + " joined you!", 2600);
+        const worldName = (WORLDS[world] && WORLDS[world].name) || "this world";
+        setCodeStatus("Unlocked " + pet.name + " for " + worldName + ".", true);
+        refreshRewardViews();
+        saveGame(true);
+        return;
+    }
+
+    if (code === "admin") {
+        game.points = Math.max(game.points || 0, 1e300);
+        game.totalEarned = Math.max(game.totalEarned || 0, game.points);
+        game.redeemedCodes.admin = Date.now();
+        if (input) input.value = "";
+        sfxRare(4);
+        screenFlash("#FFD54A");
+        showToast("🛠️ Admin mode: unlimited Stink added!", 2600);
+        setCodeStatus("Admin testing Stink added.", true);
+        refreshRewardViews();
+        saveGame(true);
+        return;
+    }
+
+    setCodeStatus("Invalid code.", false);
+    sfxError();
 }
 function exportSave() { try{navigator.clipboard.writeText(btoa(JSON.stringify(game)));showToast("📋 Save copied!",2200);}catch(e){showToast("Export failed",1500);} }
 function importSave() {
@@ -2204,6 +2306,11 @@ function initGame() {
     renderPets();
     renderWorlds();
     syncSettingsUI();
+    const codeInput = document.getElementById("code-input");
+    if (codeInput && !codeInput.dataset.bound) {
+        codeInput.addEventListener("keydown", ev => { if (ev.key === "Enter") redeemCode(); });
+        codeInput.dataset.bound = "1";
+    }
     const mainBtn = document.getElementById("main-btn");
     if (mainBtn) {
         mainBtn.addEventListener("click", handleMainClick);
