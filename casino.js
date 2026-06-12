@@ -968,15 +968,18 @@ function spinWheel(fromAd) {
         '<span class="wheel-odd"><span class="wheel-odd-dot" style="background:' + s.color + '"></span>' + s.label + ' <b>' + wheelOddsPct(s, totalW) + '%</b></span>'
     ).join("");
 
-    const html = '<div class="wheel-cabinet">' +
+    const html = '<div class="wheel-hero-title">🎡 Lucky Wheel</div>' +
+        '<div class="wheel-cabinet">' +
         '<div class="wheel-lights"></div>' +
+        '<div class="wheel-glow-ring"></div>' +
         '<div class="wheel-stage">' +
         '<div class="wheel-pointer"></div>' +
         '<div class="wheel-rotor" id="wheel-rotor">' + buildWheelSVG(totalW) + '</div>' +
         '<div class="wheel-cap"></div>' +
         '</div></div>' +
-        '<div class="wheel-odds-list">' + oddsList + '</div>' +
-        '<p id="wheel-result" class="wheel-result">Spinning...</p>';
+        '<p id="wheel-result" class="wheel-result">🌀 Spinning...</p>' +
+        '<details class="wheel-odds-toggle"><summary>Show odds</summary>' +
+        '<div class="wheel-odds-list">' + oddsList + '</div></details>';
     openCasinoModal("🎡 Lucky Wheel", html);
     sfxWhoosh();
     const rotor = document.getElementById("wheel-rotor");
@@ -992,7 +995,7 @@ function spinWheel(fromAd) {
     casinoDefer(sess, () => {
         picked.fn();
         const res = document.getElementById("wheel-result");
-        if (res) res.innerHTML = "🎉 <b style='color:" + picked.color + "'>" + picked.label + "</b>!";
+        if (res) res.innerHTML = "🎉 <b class='wheel-win-text' style='color:" + picked.color + "'>" + picked.label + "</b>";
         if (picked.weight <= 0.2) { rainbowFlash(); shake(); bigBanner("ULTRA PET!!!", "#00ffd0"); sfxRare(5); }
         else { screenFlash(picked.color); sfxBuy(); }
         showToast("🎡 " + picked.label, 2800);

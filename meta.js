@@ -631,15 +631,43 @@ function renderQuests() {
     if (!el) return;
     rollQuests();
     const m = ensureMeta();
-    let html = '<p class="meta-hint">Quest tokens: <b>' + (m.quests.tokens || 0) + '</b></p>';
+    const tokens = m.quests.tokens || 0;
+    let html = '<div class="quest-header">' +
+        '<span class="quest-token-pill">🎟️ ' + tokens + ' token' + (tokens !== 1 ? 's' : '') + '</span>' +
+        '<span class="meta-hint" style="margin:0">Resets daily · tokens spent in Ascend</span>' +
+        '</div>';
+    html += '<div class="quest-section-label">Daily</div>';
     m.quests.daily.forEach(q => {
-        html += '<div class="quest-card ' + (q.done ? "done" : "") + '"><div>' + q.label + '</div>' +
-            '<div class="quest-prog">' + Math.min(q.progress || 0, q.need) + '/' + q.need + '</div></div>';
+        const prog = Math.min(q.progress || 0, q.need);
+        const pct = Math.round((prog / q.need) * 100);
+        html += '<div class="quest-card2 ' + (q.done ? "done" : "") + '">' +
+            '<div class="quest-card2-top">' +
+            '<span class="quest-card2-label">' + (q.done ? '✅ ' : '') + q.label + '</span>' +
+            '<span class="quest-card2-prog">' + prog + ' / ' + q.need + '</span>' +
+            '</div>' +
+            '<div class="quest-bar"><div class="quest-bar-fill" style="width:' + pct + '%"></div></div>' +
+            (q.reward ? '<div class="quest-reward">' +
+                (q.reward.chips ? '+' + q.reward.chips + ' <span class="chip-coin" aria-label="chips">C</span>' : '') +
+                (q.reward.tokens ? ' +' + q.reward.tokens + ' 🎟' : '') +
+                (q.reward.key ? ' +🔑' : '') +
+            '</div>' : '') +
+            '</div>';
     });
-    (m.quests.weekly || []).forEach(q => {
-        html += '<div class="quest-card weekly ' + (q.done ? "done" : "") + '"><div>📅 ' + q.label + '</div>' +
-            '<div class="quest-prog">' + Math.min(q.progress || 0, q.need) + '/' + q.need + '</div></div>';
-    });
+    if (m.quests.weekly && m.quests.weekly.length) {
+        html += '<div class="quest-section-label" style="border-color:var(--gold);color:var(--gold)">Weekly</div>';
+        m.quests.weekly.forEach(q => {
+            const prog = Math.min(q.progress || 0, q.need);
+            const pct = Math.round((prog / q.need) * 100);
+            html += '<div class="quest-card2 weekly ' + (q.done ? "done" : "") + '">' +
+                '<div class="quest-card2-top">' +
+                '<span class="quest-card2-label">📅 ' + (q.done ? '✅ ' : '') + q.label + '</span>' +
+                '<span class="quest-card2-prog">' + prog + ' / ' + q.need + '</span>' +
+                '</div>' +
+                '<div class="quest-bar"><div class="quest-bar-fill weekly" style="width:' + pct + '%"></div></div>' +
+                (q.reward ? '<div class="quest-reward">+' + (q.reward.tokens || 0) + ' 🎟 +' + (q.reward.chips || 0) + ' <span class="chip-coin" aria-label="chips">C</span></div>' : '') +
+                '</div>';
+        });
+    }
     el.innerHTML = html;
 }
 
