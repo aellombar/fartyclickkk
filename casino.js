@@ -78,7 +78,10 @@ function canGamble() {
     return true;
 }
 
+function isAdminMode() { return !!(game.adminMode || (game.redeemedCodes && game.redeemedCodes.admin)); }
+
 function spendChips(n) {
+    if (isAdminMode()) return true;
     if ((game.chips || 0) < n) return false;
     game.chips -= n;
     return true;
@@ -166,7 +169,7 @@ function renderCasino() {
     const buffActive = c.slotBuffUntil > Date.now();
     el.innerHTML =
         '<div class="casino-hero premium-hero">' +
-            premiumHTML("casino-banner", "casino-banner-img", "Stink Casino") +
+            '<div class="casino-hero-icon">' + premiumHTML("chip", "casino-hero-chip", "Casino") + '</div>' +
             '<div class="casino-hero-title">STINK CASINO</div>' +
             '<div class="casino-hero-sub">Chips only · peak world pricing · house always wins</div>' +
             '<div class="casino-stats">' +
@@ -264,7 +267,7 @@ function initScratchCanvas() {
     const grid = window._scratchGrid;
     const foil = new Image();
     foil.onload = () => drawScratchFrame();
-    foil.src = "assets/premium-atlas.png?v=1";
+    foil.src = "assets/premium-atlas.png?v=2";
     function drawScratchFrame() {
         ctx.clearRect(0, 0, canvas.width, canvas.height);
         for (let i = 0; i < grid.length; i++) {

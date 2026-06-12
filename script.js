@@ -21,6 +21,7 @@ function freshGameState() {
         auraUpgrades: {},
         discovered: {},
         redeemedCodes: {},
+        adminMode: false,
         chips: 0,
         peakWorldIdx: 0,
         casino: null,
@@ -1021,22 +1022,29 @@ const DRUM_VARIANTS = [
     { kicks: [1,0,0,1,0,0,1,0,1,0,0,1,0,0,1,0], hats: [1,0,1,0,1,1,0,1,1,0,1,0,1,1,0,1] },
     { kicks: [1,0,0,0,0,0,0,0,1,0,0,0,0,0,1,0], hats: [0,0,1,0,0,0,1,0,0,0,1,0,0,0,0,1] }
 ];
+function transposeMelodies(melodies, semitones) {
+    const st = semitones || 0;
+    return melodies.map(row => row.map(n => (n === null || n === undefined) ? n : n + st));
+}
 function buildWorldTrackSets() {
     const sets = [];
     for (let w = 0; w < 20; w++) {
         const tracks = [];
         for (let t = 0; t < 3; t++) {
-            const src = WORLD_SONGS[(w + t * 7) % WORLD_SONGS.length];
-            const drums = DRUM_VARIANTS[t];
+            const src = WORLD_SONGS[(w * 3 + t * 11 + w * t) % WORLD_SONGS.length];
+            const drums = DRUM_VARIANTS[(w + t) % DRUM_VARIANTS.length];
+            const keyShift = (w * 2 + t * 5) % 12 - 6;
+            const bpm = WORLD_BPM_TRIPLES[w][t] + ((w + t) % 3) * 4 - 4;
             tracks.push({
                 name: WORLD_TRACK_NAMES[w][t],
-                bpm: WORLD_BPM_TRIPLES[w][t],
-                key: src.key + (t * 2 - 2),
+                bpm: Math.max(58, Math.min(112, bpm)),
+                key: src.key + keyShift,
                 voice: WORLD_VOICE_POOLS[w][t],
-                progs: src.progs,
-                melodies: src.melodies,
+                progs: src.progs.map(bar => bar.map(n => n + (w % 3) * 2)),
+                melodies: transposeMelodies(src.melodies, keyShift + t * 2),
                 kicks: drums.kicks,
-                hats: drums.hats
+                hats: drums.hats,
+                worldFilter: 900 + w * 90 + t * 120
             });
         }
         sets.push(tracks);
@@ -1078,7 +1086,7 @@ function phonkTick() {
     // pad chord every bar start
     if (s === 0) {
         const master = ensureMaster(); if (master) {
-            const f = ctx.createBiquadFilter(); f.type = "lowpass"; f.frequency.value = 1900; f.Q.value = 0.5;
+            const f = ctx.createBiquadFilter(); f.type = "lowpass"; f.frequency.value = song.worldFilter || 1900; f.Q.value = 0.5;
             const g = ctx.createGain();
             g.gain.setValueAtTime(0.0001, t);
             g.gain.linearRampToValueAtTime(0.028 * game.settings.musicVol, t + 0.9);
@@ -1116,7 +1124,14 @@ function phonkTick() {
     }
 
     PHONK.step++;
-    if (PHONK.step % 16 === 0) PHONK.bars++;
+    if (PHONK.step % 16 === 0) {
+        PHONK.bars++;
+        if (PHONK.bars > 0 && PHONK.bars % 44 === 0) {
+            PHONK.trackIdx = (PHONK.trackIdx + 1) % 3;
+            PHONK.step = 0;
+            announceTrack();
+        }
+    }
 }
 
 function worldKey() { return getSong().key; }
@@ -1315,6 +1330,7 @@ function sanitizeGameState() {
     if (typeof game.aura !== "number" || isNaN(game.aura) || game.aura < 0) game.aura = 0;
     if (!game.auraUpgrades || typeof game.auraUpgrades !== "object") game.auraUpgrades = {};
     if (!game.redeemedCodes || typeof game.redeemedCodes !== "object") game.redeemedCodes = {};
+    if (game.redeemedCodes.admin) game.adminMode = true;
     if (typeof game.chips !== "number" || isNaN(game.chips) || game.chips < 0) game.chips = 0;
     if (typeof game.peakWorldIdx !== "number" || game.peakWorldIdx < 0) game.peakWorldIdx = game.worldIdx || 0;
     game.peakWorldIdx = Math.max(game.peakWorldIdx, game.worldIdx || 0);
@@ -1672,14 +1688,24 @@ function redeemCode() {
     }
 
     if (code === "admin") {
-        game.points = Math.max(game.points || 0, 1e300);
+        game.adminMode = true;
+        game.points = 1e300;
+        game.chips = 1e9;
+        game.aura = 1e7;
         game.totalEarned = Math.max(game.totalEarned || 0, game.points);
         game.redeemedCodes.admin = Date.now();
+        if (!game.casino && typeof freshCasinoState === "function") game.casino = freshCasinoState();
+        if (game.casino) {
+            game.casino.secretShards = 999;
+            game.casino.crateKeys = 9999;
+            game.casino.dailyGambles = 0;
+        }
         if (input) input.value = "";
         sfxRare(4);
         screenFlash("#FFD54A");
-        showToast("🛠️ Admin mode: unlimited Stink added!", 2600);
-        setCodeStatus("Admin testing Stink added.", true);
+        rainbowFlash();
+        showToast("🛠️ ADMIN: unlimited Stink, Chips, Aura!", 3000);
+        setCodeStatus("Admin mode active — all currencies maxed.", true);
         refreshRewardViews();
         saveGame(true);
         return;
@@ -2194,15 +2220,21 @@ function rollEggMulti(idx, count) {
     if (game.points < cost) { sfxError(); showToast("❌ Not enough Stink!", 1500); return; }
     game.points -= cost;
     const results = [];
-    for (let i=0; i<count; i++) {
+    for (let i = 0; i < count; i++) {
         const chosen = rollBestFromEgg(egg);
-        const pet = { id: Date.now()+Math.floor(Math.random()*100000)+i, name: chosen.name, emoji: chosen.emoji,
-            rarity: chosen.rarity, star: 0, power: petPower(chosen.base, game.worldIdx) };
-        game.pets.push(pet);
-        game.discovered[dexKey(game.worldIdx, pet.name)] = true;
-        results.push({ pet, egg });
+        results.push({
+            pet: {
+                id: Date.now() + Math.floor(Math.random() * 100000) + i,
+                name: chosen.name,
+                emoji: chosen.emoji,
+                rarity: chosen.rarity,
+                star: 0,
+                power: petPower(chosen.base, game.worldIdx)
+            },
+            egg: egg
+        });
     }
-    updateDisplay(); saveGame();
+    saveGame();
     hatchMultiSession = true;
     hatchQueue = results.slice(1);
     playHatch(results[0].pet, results[0].egg);
@@ -2221,11 +2253,15 @@ function rollEgg(idx) {
     hatchMultiSession = false;
     hatchQueue = [];
     const chosen = rollBestFromEgg(egg);
-    const pet = { id: Date.now()+Math.floor(Math.random()*100000), name: chosen.name, emoji: chosen.emoji,
-        rarity: chosen.rarity, star: 0, power: petPower(chosen.base, game.worldIdx) };
-    game.pets.push(pet);
-    game.discovered[dexKey(game.worldIdx, pet.name)] = true;
-    updateDisplay(); saveGame();
+    const pet = {
+        id: Date.now() + Math.floor(Math.random() * 100000),
+        name: chosen.name,
+        emoji: chosen.emoji,
+        rarity: chosen.rarity,
+        star: 0,
+        power: petPower(chosen.base, game.worldIdx)
+    };
+    saveGame();
     playHatch(pet, egg);
 }
 
@@ -2287,13 +2323,21 @@ function playHatchTurbo(pet, egg) {
                 '<div class="hatch-name">' + pet.name + '</div>' +
                 '<div class="hatch-power" style="color:' + r.color + '">' + pet.power.toFixed(2) + 'x click power</div>';
             resEl.classList.add("show");
-            hatchTimeout = setTimeout(finishHatch, advanceTime);
+            hatchTimeout = setTimeout(finishHatch, tier >= 5 ? advanceTime + 800 : advanceTime);
         }, 45 + tier * 10);
     }, buildTime);
 }
 
+function commitHatchPet(pet) {
+    if (!pet) return;
+    const exists = (game.pets || []).some(p => p.id === pet.id);
+    if (!exists) game.pets.push(pet);
+    game.discovered[dexKey(game.worldIdx, pet.name)] = true;
+}
+
 function playHatch(pet, egg) {
-    if (hatchMultiSession) return playHatchTurbo(pet, egg);
+    const hatchTier = (RARITY[pet.rarity] || RARITY.common).tier;
+    if (hatchMultiSession && hatchTier < 5) return playHatchTurbo(pet, egg);
     clearHatchAnim();
     hatchActive = true; pendingHatch = pet;
     const r = RARITY[pet.rarity] || RARITY.common;
@@ -2323,8 +2367,8 @@ function playHatch(pet, egg) {
     const hatchFx = buildHatchFX(overlay, r.color, tier, pet.emoji || egg.emoji);
 
     // ---- PHASE 1: suspense build-up (scales by tier) ----
-    const buildTimes = [600, 1000, 1600, 2400, 3400, 4800];
-    const buildTime = buildTimes[tier] || 600;
+    const buildTimes = [700, 1100, 1800, 2800, 4200, 6200];
+    const buildTime = buildTimes[tier] || 700;
 
     eggEl.style.transition = "transform " + (buildTime/1000).toFixed(1) + "s cubic-bezier(0.2,0,0.8,1), filter " + (buildTime/1000).toFixed(1) + "s ease";
     hatchDelay(() => {
@@ -2424,24 +2468,36 @@ function playHatch(pet, egg) {
             burstAt(window.innerWidth*0.8, window.innerHeight*0.3, r.color, 30);
         }
         if (tier >= 5) {
-            emojiRain(["✦","💎",pet.emoji,"💥","🌈","🔱","⭐","🌟"], 140);
+            document.body.classList.add("slowmo");
+            overlay.classList.add("secret-hatch");
+            emojiRain(["✦","💎",pet.emoji,"💥","🌈","🔱","⭐","🌟"], 180);
             rainbowFlash();
             shockwave("#ffffff");
-            spawnConfetti("#ffffff", 100);
-            spawnConfetti(r.color, 100);
-            burstAt(window.innerWidth/2, window.innerHeight*0.4, "#ffffff", 80);
-            burstAt(window.innerWidth*0.1, window.innerHeight*0.5, r.color, 40);
-            burstAt(window.innerWidth*0.9, window.innerHeight*0.5, r.color, 40);
-            hatchDelay(() => { shake(); rainbowFlash(); sfxRare(5); shockwave(r.color); }, 200);
-            hatchDelay(() => { shake(); shockwave("#ffffff"); emojiRain(["✦","💎","🔱","👑","🌟"], 80); }, 500);
-            hatchDelay(() => { rainbowFlash(); shockwave(r.color); sfxRare(5); }, 800);
-            hatchDelay(() => { shake(); rainbowFlash(); shockwave("#ffffff"); }, 1100);
-            overlay.style.transition = "background 0.08s";
-            hatchDelay(() => { overlay.style.background = "#000000f0"; }, 100);
-            hatchDelay(() => { overlay.style.background = r.color + "bb"; rainbowFlash(); }, 300);
-            hatchDelay(() => { overlay.style.background = "#000000f0"; }, 550);
-            hatchDelay(() => { overlay.style.background = "radial-gradient(ellipse at center," + r.color + "55 0%,rgba(5,2,12,0.97) 65%)"; rainbowFlash(); }, 750);
-            if (!multiActive) hatchDelay(() => bigBanner("✦ SECRET FOUND ✦", r.color), 250);
+            spawnConfetti("#ffffff", 140);
+            spawnConfetti(r.color, 140);
+            burstAt(window.innerWidth/2, window.innerHeight*0.4, "#ffffff", 100);
+            burstAt(window.innerWidth*0.1, window.innerHeight*0.5, r.color, 50);
+            burstAt(window.innerWidth*0.9, window.innerHeight*0.5, r.color, 50);
+            for (let si = 0; si < 8; si++) {
+                hatchDelay(() => {
+                    shake();
+                    rainbowFlash();
+                    sfxRare(5);
+                    shockwave(si % 2 ? "#ffffff" : r.color);
+                    screenFlash(si % 2 ? r.color : "#ffffff");
+                }, 150 + si * 220);
+            }
+            hatchDelay(() => { emojiRain(["✦","💎","🔱","👑","🌟","🚽","💥"], 120); }, 600);
+            hatchDelay(() => { bigBanner("✦ SECRET FOUND ✦", r.color); }, 200);
+            overlay.style.transition = "background 0.06s";
+            [100, 280, 460, 640, 820, 1000].forEach((ms, i) => {
+                hatchDelay(() => {
+                    overlay.style.background = i % 2
+                        ? "radial-gradient(ellipse at center," + r.color + "66 0%,#000000f5 70%)"
+                        : "#000000f2";
+                    rainbowFlash();
+                }, ms);
+            });
         }
 
         // ---- PHASE 4: REVEAL ----
@@ -2475,8 +2531,8 @@ function playHatch(pet, egg) {
                 document.body.classList.remove("slowmo");
 
                 if (multiActive) {
-                    if (skip) { skip.textContent = "Next egg..."; skip.style.opacity = "0.45"; skip.style.pointerEvents = "none"; }
-                    hatchTimeout = setTimeout(finishHatch, 900 + tier * 100);
+                    if (skip) { skip.textContent = tier >= 5 ? "SECRET!!!" : "Next egg..."; skip.style.opacity = "0.45"; skip.style.pointerEvents = "none"; }
+                    hatchTimeout = setTimeout(finishHatch, tier >= 5 ? 5500 : (900 + tier * 100));
                 } else if (tier === 0) {
                     if (skip) { skip.style.opacity = "0.35"; skip.style.pointerEvents = "none"; }
                     hatchTimeout = setTimeout(finishHatch, 1400);
@@ -2497,7 +2553,9 @@ function overlayTap() {
 }
 function finishHatch() {
     if (!hatchActive) return;
+    if (pendingHatch) commitHatchPet(pendingHatch);
     hatchActive = false;
+    pendingHatch = null;
     if (hatchChargeInt) { clearInterval(hatchChargeInt); hatchChargeInt = null; }
     if (hatchTimeout) { clearTimeout(hatchTimeout); hatchTimeout = null; }
     hatchAnimTimers.forEach(t => clearTimeout(t));
@@ -2507,17 +2565,19 @@ function finishHatch() {
     const resEl = document.getElementById("hatch-result");
     if (rays) rays.classList.remove("spin");
     if (resEl) { resEl.innerHTML = ""; resEl.className = "hatch-result"; }
-    if (overlay) overlay.classList.add("hidden");
+    if (overlay) { overlay.classList.add("hidden"); overlay.classList.remove("secret-hatch"); }
     document.body.classList.remove("slowmo");
     if (hatchQueue.length > 0) {
         const next = hatchQueue.shift();
-        const gap = hatchMultiSession ? 50 : 350;
+        const nextTier = (RARITY[next.pet.rarity] || RARITY.common).tier;
+        const gap = hatchMultiSession ? (nextTier >= 5 ? 400 : 60) : 350;
         hatchAnimTimers.push(setTimeout(() => playHatch(next.pet, next.egg), gap));
         return;
     }
     hatchMultiSession = false;
     updateDisplay();
     renderEggShop();
+    if (sheetOpen("pets")) renderPetSheet();
     const m = document.getElementById("egg-modal"); if (m) m.classList.remove("hidden");
     petTabCur = "collection";
 }

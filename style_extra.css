@@ -312,10 +312,16 @@
 .main-emoji {
     display: grid;
     place-items: center;
-}
-.main-icon-img {
+    border-radius: 50%;
+    overflow: hidden;
     width: clamp(4.8rem, 21vw, 7.6rem);
     height: clamp(4.8rem, 21vw, 7.6rem);
+}
+.main-icon-img,
+.premium-icon.main-icon-img {
+    width: 100%;
+    height: 100%;
+    margin: 0;
 }
 .logo-icon-img { width: 1.35rem; height: 1.35rem; margin-right: 6px; }
 .nav-icon-img { width: 1.85rem; height: 1.85rem; }
@@ -1185,40 +1191,41 @@ body::before {
     100% { opacity: 0; transform: translateY(-70px) scale(1.25) rotate(16deg); }
 }
 
-/* ---- PREMIUM ATLAS (6×4 @ 256px) ---- */
+/* ---- PREMIUM ATLAS (6×4 @ 256px) — same math as .game-icon ---- */
 .premium-icon {
+    --pcols: 6;
+    --prows: 4;
+    --px: 0;
+    --py: 0;
     display: inline-block;
     width: 1.35em;
     height: 1.35em;
     vertical-align: middle;
-    background-image: url("assets/premium-atlas.png?v=1");
-    background-size: 600% 400%;
-    background-position: calc(var(--px) * 20%) calc(var(--py) * 33.333%);
+    background-color: transparent;
+    background-image: url("assets/premium-atlas.png?v=2");
     background-repeat: no-repeat;
+    background-size: calc(var(--pcols) * 100%) calc(var(--prows) * 100%);
+    background-position:
+        calc(var(--px) * 100% / (var(--pcols) - 1))
+        calc(var(--py) * 100% / (var(--prows) - 1));
     image-rendering: auto;
 }
 .premium-icon.main-icon-img,
 .premium-icon.logo-icon-img {
-    width: 88px;
-    height: 88px;
+    width: 92px;
+    height: 92px;
     display: block;
     margin: 0 auto;
-    filter: drop-shadow(0 0 18px rgba(127,255,0,0.45));
-}
-.premium-icon.casino-banner-img {
-    width: 100%;
-    max-width: 280px;
-    height: 72px;
-    display: block;
-    margin: 0 auto 8px;
-    background-size: 600% 400%;
+    border-radius: 50%;
+    filter: drop-shadow(0 0 22px rgba(127,255,0,0.55));
 }
 .premium-icon.casino-stat-ico,
 .premium-icon.casino-shard-ico,
 .premium-icon.crate-item-ico,
 .premium-icon.mine-tile-ico {
-    width: 36px;
-    height: 36px;
+    width: 28px;
+    height: 28px;
+    flex-shrink: 0;
 }
 .premium-icon.wheel-premium {
     width: 100px;
@@ -1240,16 +1247,29 @@ body::before {
     border: 1px solid rgba(255,255,255,0.12);
     box-shadow: 0 0 28px rgba(255,61,154,0.15);
 }
+.casino-hero-icon { margin-bottom: 6px; }
+.casino-hero-chip { width: 52px; height: 52px; display: block; margin: 0 auto; }
 .casino-hero-title {
     font-family: 'Russo One', sans-serif;
     font-size: 1.35rem;
     color: #ffd54a;
     text-shadow: 0 0 16px rgba(255,213,74,0.5);
 }
+.hatch-overlay.secret-hatch {
+    animation: secretHatchPulse 0.35s ease-in-out infinite alternate;
+}
+@keyframes secretHatchPulse {
+    from { filter: brightness(1) saturate(1.2); }
+    to { filter: brightness(1.35) saturate(1.6); }
+}
 .casino-hero-sub { font-size: 0.82rem; color: var(--muted); margin-top: 4px; }
 .casino-stats {
-    display: flex; flex-wrap: wrap; justify-content: center; gap: 10px;
-    margin-top: 10px; font-size: 0.78rem;
+    display: flex; flex-wrap: wrap; justify-content: center; gap: 14px 18px;
+    margin-top: 12px; font-size: 0.78rem;
+}
+.casino-stats > span {
+    display: inline-flex; align-items: center; gap: 6px;
+    white-space: nowrap;
 }
 .casino-hot { color: #7fff00; font-weight: 700; animation: casinoPulse 1s ease-in-out infinite; }
 @keyframes casinoPulse { 0%,100%{opacity:1;} 50%{opacity:0.55;} }
