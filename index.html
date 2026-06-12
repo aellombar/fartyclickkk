@@ -18,7 +18,7 @@
 
     <div id="game-container">
         <header class="top-bar">
-            <div class="logo-mini">💨 FART CLICKER</div>
+            <div class="logo-mini"><span class="game-icon logo-icon-img" style="--ix:0;--iy:0" role="img" aria-label="Fart Clicker"></span> FART CLICKER</div>
             <div class="top-right">
                 <span id="aura-mini" class="aura-pill">✦ 0</span>
                 <button class="gear-btn" onclick="openSheet('settings')" aria-label="Settings">⚙️</button>
@@ -44,7 +44,7 @@
                 <span id="combo-label">COMBO x1.0</span>
             </div>
             <button id="main-btn" class="main-click-btn">
-                <span class="main-emoji">💨</span>
+                <span class="main-emoji"><span class="game-icon main-icon-img" style="--ix:0;--iy:0" role="img" aria-label="Click"></span></span>
                 <span class="main-label">CLICK</span>
             </button>
         </div>
@@ -53,10 +53,10 @@
     </div>
 
     <nav class="bottom-nav">
-        <button class="nav-btn" data-sheet="upgrades" onclick="openSheet('upgrades')"><span class="nav-ico">🛒</span><span class="nav-txt">Upgrades</span></button>
-        <button class="nav-btn" data-sheet="pets" onclick="openSheet('pets')"><span class="nav-ico">🐾</span><span class="nav-txt">Pets</span></button>
-        <button class="nav-btn" data-sheet="worlds" onclick="openSheet('worlds')"><span class="nav-ico">🌍</span><span class="nav-txt">Worlds</span></button>
-        <button class="nav-btn" data-sheet="aura" onclick="openSheet('aura')"><span class="nav-ico">✦</span><span class="nav-txt">Aura</span></button>
+        <button class="nav-btn" data-sheet="upgrades" onclick="openSheet('upgrades')"><span class="nav-ico"><span class="game-icon nav-icon-img" style="--ix:1;--iy:0" role="img" aria-label="Upgrades"></span></span><span class="nav-txt">Upgrades</span></button>
+        <button class="nav-btn" data-sheet="pets" onclick="openSheet('pets')"><span class="nav-ico"><span class="game-icon nav-icon-img" style="--ix:2;--iy:0" role="img" aria-label="Pets"></span></span><span class="nav-txt">Pets</span></button>
+        <button class="nav-btn" data-sheet="worlds" onclick="openSheet('worlds')"><span class="nav-ico"><span class="game-icon nav-icon-img" style="--ix:3;--iy:0" role="img" aria-label="Worlds"></span></span><span class="nav-txt">Worlds</span></button>
+        <button class="nav-btn" data-sheet="aura" onclick="openSheet('aura')"><span class="nav-ico"><span class="game-icon nav-icon-img" style="--ix:4;--iy:0" role="img" aria-label="Aura"></span></span><span class="nav-txt">Aura</span></button>
     </nav>
 
     <div class="sheet-overlay" id="sheet-overlay" onclick="closeSheet()"></div>
@@ -127,6 +127,14 @@
                 <button class="toggle-row" id="tg-shake" onclick="toggleSetting('screenShake', this)"><span>📳 Screen Shake</span><span class="toggle-pill">ON</span></button>
                 <button class="toggle-row" id="tg-brainrot" onclick="toggleSetting('brainrot', this)"><span>🧠 Brainrot Mode</span><span class="toggle-pill">ON</span></button>
             </div>
+            <div class="set-group code-group">
+                <label class="set-row"><span>🎁 Codes</span><span class="set-val">Rewards</span></label>
+                <div class="code-row">
+                    <input id="code-input" class="code-input" type="text" placeholder="Enter code" autocomplete="off">
+                    <button class="set-action code-submit" onclick="redeemCode()">Redeem</button>
+                </div>
+                <p id="code-status" class="code-status">Try release.</p>
+            </div>
             <div class="set-group">
                 <button class="set-action" onclick="exportSave()">📤 Export Save</button>
                 <button class="set-action" onclick="importSave()">📥 Import Save</button>
@@ -172,7 +180,7 @@
     <!-- Offline Modal -->
     <div id="offline-modal" class="modal hidden">
         <div class="modal-content offline-content">
-            <div class="offline-emoji">😴💨</div>
+            <div class="offline-emoji"><span class="game-icon offline-icon-img" style="--ix:0;--iy:0" role="img" aria-label="Offline stink"></span></div>
             <h2>Welcome Back!</h2>
             <p class="offline-text">While you were gone your farts earned:</p>
             <div id="offline-amount" class="offline-amount">0 💨</div>
