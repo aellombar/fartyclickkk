@@ -2090,6 +2090,7 @@ function initGame() {
     const eggModal = document.getElementById("egg-modal");
     if (hatchOverlay) hatchOverlay.classList.add("hidden");
     if (eggModal) eggModal.classList.add("hidden");
+    closeSheet();
     if (!game.settings.particles) { const o=document.getElementById("particle-overlay"); if(o)o.style.display="none"; }
     createParticles();
     applyWorldTheme();
