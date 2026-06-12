@@ -257,6 +257,14 @@
 .code-status.ok { color: var(--green); text-shadow: 0 0 10px var(--green); }
 .code-status.bad { color: var(--pink); }
 
+/* ---- turbo multi-hatch (x3/x10) ---- */
+.hatch-overlay.turbo .hatch-egg {
+    transition-duration: 0.12s !important;
+}
+.hatch-overlay.turbo .hatch-result.show {
+    animation-duration: 0.2s !important;
+}
+
 /* ---- perf: isolate FX layer, cheap particle glyphs ---- */
 #golden-layer {
     contain: layout style paint;
