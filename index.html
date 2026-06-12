@@ -30,6 +30,12 @@
                 <span id="points" class="hero-value">0</span>
                 <span class="hero-label">STINK 💨</span>
             </div>
+            <div class="brainrot-mini">
+                <span id="brainrot-title" class="brainrot-mini-title">Certified Fart Novice</span>
+                <div class="brainrot-mini-bar"><div id="brainrot-fill" class="brainrot-mini-fill"></div></div>
+                <span id="brainrot-lvl" class="brainrot-mini-lvl">Lv 0</span>
+            </div>
+            <div id="invasion-hud" class="invasion-hud hidden"></div>
             <div class="stat-grid stat-grid-5">
                 <div class="stat-cell"><span class="stat-label">Per Click</span><span id="per-click" class="stat-value">1</span></div>
                 <div class="stat-cell"><span class="stat-label">Per Sec</span><span id="passive-income" class="stat-value">0</span></div>
@@ -57,6 +63,7 @@
         <button class="nav-btn" data-sheet="upgrades" onclick="openSheet('upgrades')"><span class="nav-ico"><span class="game-icon nav-icon-img" style="--ix:1;--iy:0" role="img" aria-label="Upgrades"></span></span><span class="nav-txt">Upgrades</span></button>
         <button class="nav-btn" data-sheet="pets" onclick="openSheet('pets')"><span class="nav-ico"><span class="game-icon nav-icon-img" style="--ix:2;--iy:0" role="img" aria-label="Pets"></span></span><span class="nav-txt">Pets</span></button>
         <button class="nav-btn" data-sheet="casino" onclick="openSheet('casino')"><span class="nav-ico"><span class="game-icon nav-icon-img" style="--ix:1;--iy:0" role="img" aria-label="Casino"></span></span><span class="nav-txt">Casino</span></button>
+        <button class="nav-btn" data-sheet="hub" onclick="openSheet('hub')"><span class="nav-ico">🧠</span><span class="nav-txt">Hub</span></button>
         <button class="nav-btn" data-sheet="worlds" onclick="openSheet('worlds')"><span class="nav-ico"><span class="game-icon nav-icon-img" style="--ix:3;--iy:0" role="img" aria-label="Worlds"></span></span><span class="nav-txt">Worlds</span></button>
         <button class="nav-btn" data-sheet="aura" onclick="openSheet('aura')"><span class="nav-ico"><span class="game-icon nav-icon-img" style="--ix:4;--iy:0" role="img" aria-label="Aura"></span></span><span class="nav-txt">Aura</span></button>
     </nav>
@@ -71,6 +78,7 @@
             <button class="stab active" onclick="showUpTab('click', this)">⬆️ Click</button>
             <button class="stab" onclick="showUpTab('passive', this)">💰 Passive</button>
             <button class="stab" onclick="showUpTab('slots', this)">🐾 Slots</button>
+            <button class="stab" onclick="showUpTab('factories', this)">🏭 Factories</button>
         </div>
         <div class="buymode-row">
             <span class="buymode-label">Buy:</span>
@@ -83,6 +91,7 @@
             <div id="up-click" class="up-tab active"></div>
             <div id="up-passive" class="up-tab"></div>
             <div id="up-slots" class="up-tab"></div>
+            <div id="up-factories" class="up-tab"></div>
         </div>
     </div>
 
@@ -93,6 +102,7 @@
             <button class="stab active" onclick="showPetTab('collection', this)">🎒 Collection</button>
             <button class="stab" onclick="showPetTab('fuse', this)">✨ Fuse</button>
             <button class="stab" onclick="showPetTab('index', this)">📖 Index</button>
+            <button class="stab" onclick="showPetTab('jobs', this)">💼 Jobs</button>
         </div>
         <div class="sheet-body" id="pets-body"></div>
     </div>
@@ -107,6 +117,29 @@
     <div class="sheet" id="sheet-worlds">
         <div class="sheet-head"><h2>🌍 Worlds</h2><button class="sheet-close" onclick="closeSheet()">&times;</button></div>
         <div class="sheet-body" id="worlds-body"></div>
+    </div>
+
+    <!-- Hub Sheet (achievements, quests, garden, stocks, ascension) -->
+    <div class="sheet" id="sheet-hub">
+        <div class="sheet-head"><h2>🧠 Brainrot Hub</h2><button class="sheet-close" onclick="closeSheet()">&times;</button></div>
+        <div class="sheet-tabs hub-tabs">
+            <button class="hstab active" onclick="showHubTab('achievements', this)">🏆</button>
+            <button class="hstab" onclick="showHubTab('quests', this)">📋</button>
+            <button class="hstab" onclick="showHubTab('garden', this)">🌱</button>
+            <button class="hstab" onclick="showHubTab('stocks', this)">📈</button>
+            <button class="hstab" onclick="showHubTab('ascension', this)">☄</button>
+            <button class="hstab" onclick="showHubTab('stats', this)">📊</button>
+            <button class="hstab" onclick="showHubTab('invasion', this)">🚨</button>
+        </div>
+        <div class="sheet-body hub-body">
+            <div id="hub-achievements" class="hub-tab active"></div>
+            <div id="hub-quests" class="hub-tab"></div>
+            <div id="hub-garden" class="hub-tab"></div>
+            <div id="hub-stocks" class="hub-tab"></div>
+            <div id="hub-ascension" class="hub-tab"></div>
+            <div id="hub-stats" class="hub-tab"></div>
+            <div id="hub-invasion" class="hub-tab"></div>
+        </div>
     </div>
 
     <!-- Aura Sheet -->
@@ -142,6 +175,21 @@
                     <button class="set-action code-submit" onclick="redeemCode()">Redeem</button>
                 </div>
                 <p id="code-status" class="code-status">Try release.</p>
+            </div>
+            <div class="set-group">
+                <label class="set-row"><span>💾 Save Slots</span><span class="set-val">3 slots</span></label>
+                <div class="slot-row">
+                    <button class="set-action slot-btn" onclick="saveSlotExport(1)">Save 1</button>
+                    <button class="set-action slot-btn" onclick="saveSlotLoad(1)">Load 1</button>
+                </div>
+                <div class="slot-row">
+                    <button class="set-action slot-btn" onclick="saveSlotExport(2)">Save 2</button>
+                    <button class="set-action slot-btn" onclick="saveSlotLoad(2)">Load 2</button>
+                </div>
+                <div class="slot-row">
+                    <button class="set-action slot-btn" onclick="saveSlotExport(3)">Save 3</button>
+                    <button class="set-action slot-btn" onclick="saveSlotLoad(3)">Load 3</button>
+                </div>
             </div>
             <div class="set-group">
                 <button class="set-action" onclick="exportSave()">📤 Export Save</button>
@@ -198,5 +246,6 @@
 
     <script src="script.js"></script>
     <script src="casino.js"></script>
+    <script src="meta.js"></script>
 </body>
 </html>

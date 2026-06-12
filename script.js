@@ -25,6 +25,8 @@ function freshGameState() {
         chips: 0,
         peakWorldIdx: 0,
         casino: null,
+        meta: null,
+        ascension: 0,
         lastSeen: Date.now(),
         settings: {
             musicVol: 0.35, sfxVol: 0.70,
@@ -129,7 +131,8 @@ const WORLDS = [
     { name: "Galactic Core",    reqRebirths: 870,  icon: "🌌", theme: { p:"#ffd54a", s:"#b14eff", a:"#00e0ff", bg1:"#0a0428", bg2:"#040214" } },
     { name: "Time Rift",        reqRebirths: 1050, icon: "⏳", theme: { p:"#ffe080", s:"#40ffd0", a:"#ff3d9a", bg1:"#2a200a", bg2:"#141004" } },
     { name: "Gigachad Nexus",   reqRebirths: 1260, icon: "💪", theme: { p:"#ff1050", s:"#ffd54a", a:"#00e0ff", bg1:"#2a0820", bg2:"#140410" } },
-    { name: "The Final Stench", reqRebirths: 1500, icon: "👑", theme: { p:"#ffd700", s:"#ff00ff", a:"#00ffd0", bg1:"#1a001a", bg2:"#0a000a" } }
+    { name: "The Final Stench", reqRebirths: 1500, icon: "👑", theme: { p:"#ffd700", s:"#ff00ff", a:"#00ffd0", bg1:"#1a001a", bg2:"#0a000a" } },
+    { name: "The Void Between", reqRebirths: 99999, icon: "🌀", secret: true, theme: { p:"#00ffd0", s:"#b14eff", a:"#ffffff", bg1:"#000818", bg2:"#000004" } }
 ];
 
 // ---------- Number format (NaN-safe) ----------
@@ -189,7 +192,7 @@ function applyChromeIcons() {
     if (main) main.outerHTML = iconHTML("💨", "main-icon-img", "Click");
     const offline = document.querySelector(".offline-icon-img");
     if (offline) offline.outerHTML = iconHTML("💨", "offline-icon-img", "Offline stink");
-    [["upgrades","🛒"],["pets","🐾"],["casino","💎"],["worlds","🌍"],["aura","✦"]].forEach(([sheet, emoji]) => {
+    [["upgrades","🛒"],["pets","🐾"],["casino","💎"],["hub","🧠"],["worlds","🌍"],["aura","✦"]].forEach(([sheet, emoji]) => {
         const wrap = document.querySelector('.nav-btn[data-sheet="' + sheet + '"] .nav-ico');
         if (wrap) wrap.innerHTML = iconHTML(emoji, "nav-icon-img", sheet);
     });
@@ -518,6 +521,7 @@ function eggCost(t, world) {
     let cost = Math.floor(base * unlockPressure * lateWorldPressure * tierPressure * slope);
     const disc = typeof casinoEggDiscount === "function" ? casinoEggDiscount() : 0;
     if (disc > 0) cost = Math.floor(cost * (1 - disc));
+    if (typeof ascensionMutatorMult === "function") cost = Math.floor(cost * ascensionMutatorMult("eggCost"));
     return cost;
 }
 function petPower(base, world) {
@@ -541,11 +545,20 @@ function scaleEggPets(egg) {
     return scaled.map(p => Object.assign({}, p, { odds: +(p.odds * 100 / sum).toFixed(3) }));
 }
 function rollBestFromEgg(egg) {
-    const tries = 1 + Math.min(auraLevel("luck"), 4);
+    let tries = 1 + Math.min(auraLevel("luck"), 4);
+    if (typeof metaBonus === "function") tries += Math.floor(metaBonus("luck") * 25);
+    if (typeof jobBonuses === "function") tries += Math.floor((jobBonuses().luck || 0) * 12);
     let chosen = pickFromEgg(egg);
     for (let k = 1; k < tries; k++) {
         const c = pickFromEgg(egg);
         if ((RARITY[c.rarity] || RARITY.common).tier > (RARITY[chosen.rarity] || RARITY.common).tier) chosen = c;
+    }
+    if (typeof ascensionMutatorMult === "function" && ascensionMutatorMult("luck") > 1) {
+        const tier = (RARITY[chosen.rarity] || RARITY.common).tier;
+        if (tier >= 5 && Math.random() < 0.35) {
+            const c = pickFromEgg(egg);
+            if ((RARITY[c.rarity] || RARITY.common).tier >= tier) chosen = c;
+        }
     }
     return chosen;
 }
@@ -1385,23 +1398,33 @@ function getClickPower() {
     UPGRADES.forEach((u, i) => {
         if (u.type === "click" && game.upgrades[i] && upgradeUnlocked(u)) p += (u.clickPower || 0) * game.upgrades[i];
     });
-    return p * rebirthBonus() * auraMult("click") * dexBonus();
+    let mult = rebirthBonus() * auraMult("click") * dexBonus();
+    if (typeof metaBonus === "function") mult *= 1 + metaBonus("stink");
+    if (typeof ascensionMutatorMult === "function") mult *= ascensionMutatorMult("click") * ascensionMutatorMult("all");
+    return p * mult;
 }
 function getPassive() {
     let p = 0;
     UPGRADES.forEach((u, i) => {
         if (u.type === "passive" && game.upgrades[i] && upgradeUnlocked(u)) p += (u.passivePower || 0) * game.upgrades[i];
     });
+    if (typeof buildingProduction === "function") p += buildingProduction();
     p *= (typeof casinoPassiveMult === "function" ? casinoPassiveMult() : 1);
-    return p * rebirthBonus() * auraMult("passive") * dexBonus();
+    let mult = rebirthBonus() * auraMult("passive") * dexBonus();
+    if (typeof jobBonuses === "function") mult *= 1 + (jobBonuses().passive || 0);
+    if (typeof ascensionMutatorMult === "function") mult *= ascensionMutatorMult("passive") * ascensionMutatorMult("all");
+    return p * mult;
 }
 function upgradeUnlocked(u) {
     return (game.worldIdx || 0) >= (u.reqWorld || 0) && (game.rebirths || 0) >= (u.reqRebirths || 0);
 }
 function getPetMult() {
-    // additive stacking so 3 pets don't multiply into insane numbers
     let m = 1;
-    (game.equippedPets || []).forEach(p => { m += (p.power || 1) - 1; });
+    (game.equippedPets || []).forEach(p => {
+        const traitM = typeof petTraitMult === "function" ? petTraitMult(p) : 1;
+        m += ((p.power || 1) * traitM) - 1;
+    });
+    if (typeof buildingPetMult === "function") m *= buildingPetMult();
     return Math.max(1, m);
 }
 function upgradeCost(i) {
@@ -1409,7 +1432,11 @@ function upgradeCost(i) {
     const lvl = game.upgrades[i] || 0;
     return Math.floor(u.baseCost * Math.pow(UPGRADE_GROWTH, lvl) * (1 + lvl * 0.018));
 }
-function getRebirthCost() { return Math.floor(12000000 * Math.pow(4.9, game.rebirths || 0)); }
+function getRebirthCost() {
+    let c = Math.floor(12000000 * Math.pow(4.9, game.rebirths || 0));
+    if (typeof ascensionMutatorMult === "function") c = Math.floor(c * ascensionMutatorMult("rebirth"));
+    return c;
+}
 function peakWorld() { return Math.max(game.peakWorldIdx || 0, game.worldIdx || 0); }
 function totalAuraSpent() {
     let s = 0;
@@ -1448,7 +1475,7 @@ function initUpgrades() {
 // ============================================================
 //  SAVE / LOAD (+ offline earnings)
 // ============================================================
-const SAVE_KEY = "fartSave_v8";
+const SAVE_KEY = "fartSave_v9";
 let offlinePending = 0;
 
 function clearAllSaveData() {
@@ -1486,6 +1513,7 @@ function sanitizeGameState() {
         game.auraUpgrades[i] = lvl;
     });
     initUpgrades();
+    if (typeof ensureMeta === "function") ensureMeta();
 }
 
 let saveTimer = null;
@@ -1506,6 +1534,7 @@ function saveGame(force) {
 function loadGame() {
     try {
         let s = localStorage.getItem(SAVE_KEY);
+        if (!s) s = localStorage.getItem("fartSave_v8");
         if (!s) s = localStorage.getItem("fartSave_v7");
         if (s) {
             const p = JSON.parse(s);
@@ -1558,6 +1587,13 @@ function handleMainClick(e) {
     lastClickTime = now;
     spamMultiplier = 1 + (comboValue / 100) * 2.5;
     game.totalClicks++;
+    if (typeof trackStat === "function") {
+        trackStat("totalClicks", 1);
+        if (typeof ensureMeta === "function") {
+            const qs = ensureMeta().quests.session;
+            if (qs) qs.clicksSession = (qs.clicksSession || 0) + 1;
+        }
+    }
 
     const critChance = Math.min(0.05 + comboValue * 0.0015, 0.25);
     criticalMultiplier = 1;
@@ -1566,6 +1602,7 @@ function handleMainClick(e) {
     let dmg = getClickPower() * spamMultiplier * getPetMult() * criticalMultiplier;
     if (isNaN(dmg) || dmg < 0) dmg = 1;
     game.points += dmg; game.totalEarned += dmg;
+    if (typeof invasionClick === "function") invasionClick(dmg);
 
     sfxClick();
     const w = WORLDS[game.worldIdx || 0];
@@ -1679,6 +1716,7 @@ function renderUpgradeTabs() {
     if (!s) s = '<p class="empty-text">All pet slots unlocked! 🎉</p>';
     const ce = document.getElementById("up-click"), pe = document.getElementById("up-passive"), se = document.getElementById("up-slots");
     if (ce) ce.innerHTML = c; if (pe) pe.innerHTML = p; if (se) se.innerHTML = s;
+    if (typeof renderBuildingsTab === "function") renderBuildingsTab();
     upgradesRendered = true;
 }
 
@@ -1723,6 +1761,7 @@ function openSheet(name) {
     if (name === "worlds") renderWorlds();
     if (name === "aura") renderAura();
     if (name === "casino") renderCasino();
+    if (name === "hub" && typeof renderHub === "function") renderHub();
     if (name === "settings") syncSettingsUI();
     overlay.classList.add("visible"); sheet.classList.add("open");
     // highlight the active nav button
@@ -1740,6 +1779,7 @@ function showUpTab(name, btn) {
     document.querySelectorAll("#sheet-upgrades .stab").forEach(b => b.classList.remove("active"));
     const tab = document.getElementById("up-" + name); if (tab) tab.classList.add("active");
     if (btn) btn.classList.add("active");
+    if (name === "factories" && typeof renderBuildingsTab === "function") renderBuildingsTab();
 }
 
 
@@ -1902,6 +1942,14 @@ function rebirth() {
     const gain = auraGainPreview();
     const chipGain = Math.max(1, Math.floor(Math.sqrt(game.rebirths + 1) * 2 + Math.sqrt(peakWorld() + 1)));
     game.rebirths++; game.aura += gain;
+    if (typeof trackStat === "function") {
+        trackStat("totalRebirths", 1);
+        if (typeof ensureMeta === "function") {
+            const qs = ensureMeta().quests.session;
+            if (qs) qs.rebirthsSession = (qs.rebirthsSession || 0) + 1;
+        }
+        if (typeof maybeRefreshQuests === "function") maybeRefreshQuests();
+    }
     game.points = 0; game.upgrades = {}; initUpgrades();
     comboValue = 0; spamMultiplier = 1;
     grantChips(chipGain);
@@ -1914,7 +1962,9 @@ function rebirth() {
 function renderWorlds() {
     let html = '<div class="world-grid">';
     WORLDS.forEach((w, i) => {
-        const unlocked = game.rebirths >= w.reqRebirths, current = game.worldIdx === i;
+        if (w.secret && !(game.meta && game.meta.secrets && game.meta.secrets.secretWorld)) return;
+        const unlocked = w.secret ? true : game.rebirths >= w.reqRebirths;
+        const current = game.worldIdx === i;
         html += '<div class="world-card ' + (unlocked?"unlocked":"locked") + (current?" current":"") +
             '" onclick="' + (unlocked?"selectWorld("+i+")":"") + '"><div class="world-icon">' + iconHTML(w.icon, "world-icon-img", w.name) + '</div>' +
             '<div class="world-name">' + w.name + '</div><div class="world-req">' +
@@ -1924,7 +1974,10 @@ function renderWorlds() {
     const el = document.getElementById("worlds-body"); if (el) el.innerHTML = html;
 }
 function selectWorld(i) {
-    const w = WORLDS[i]; if (!w || game.rebirths < w.reqRebirths) { sfxError(); return; }
+    const w = WORLDS[i];
+    if (!w) { sfxError(); return; }
+    if (w.secret && !(game.meta && game.meta.secrets && game.meta.secrets.secretWorld)) { sfxError(); return; }
+    if (!w.secret && game.rebirths < w.reqRebirths) { sfxError(); return; }
     const prevPeak = game.peakWorldIdx || 0;
     game.worldIdx = i; indexWorld = i;
     if (i > prevPeak) {
@@ -1982,6 +2035,7 @@ function buyAura(i) {
 function renderPetSheet() {
     if (petTabCur === "collection") renderPets();
     else if (petTabCur === "fuse") renderFuse();
+    else if (petTabCur === "jobs" && typeof renderPetJobs === "function") renderPetJobs();
     else renderIndex();
 }
 function showPetTab(name, btn) {
@@ -2097,7 +2151,15 @@ function fusePet(name, star) {
     const top = consumed[0];
     const fused = { id: Date.now()+Math.floor(Math.random()*100000), name: top.name, emoji: top.emoji,
         rarity: top.rarity, star: (star||0)+1, power: +(top.power * 2.2).toFixed(2) };
+    if (top.trait) fused.trait = top.trait;
+    else if (consumed[1] && consumed[1].trait && Math.random() < 0.4) fused.trait = consumed[1].trait;
+    if (Math.random() < 0.08 + star * 0.03) {
+        const tiers = ["common","uncommon","rare","epic","legendary","secret","ultra","divine"];
+        const idx = tiers.indexOf(fused.rarity);
+        if (idx >= 0 && idx < tiers.length - 1 && Math.random() < 0.25) fused.rarity = tiers[idx + 1];
+    }
     game.pets.push(fused);
+    if (typeof trackStat === "function") trackStat("petsFused", 1);
     sfxRare(4); screenFlash(RARITY[fused.rarity].color); burstAt(window.innerWidth/2, window.innerHeight*0.4, RARITY[fused.rarity].color, 36); shake(); emojiRain(["✨","⭐",fused.emoji],18);
     showToast("✨ Fused " + fused.name + " " + "⭐".repeat(fused.star) + " (" + fused.power.toFixed(2) + "x)!", 3000);
     renderFuse(); updateDisplay(); saveGame();
@@ -2349,7 +2411,12 @@ function closeEggModal() { const m=document.getElementById("egg-modal"); if(m)m.
 function renderEggShop() {
     const bal = document.getElementById("egg-balance"); if (bal) bal.innerText = fmt(game.points);
     const multiLvl = auraLevel("multi"), megaLvl = auraLevel("mega");
-    let html = '<div class="egg-grid">';
+    let html = "";
+    if (typeof currentMemePet === "function") {
+        const meme = currentMemePet();
+        html += '<div class="meme-week-banner">🔥 Meme of the Week: <b>' + meme.emoji + " " + meme.name + '</b> — boosted in pool!</div>';
+    }
+    html += '<div class="egg-grid">';
     getEggTemplates().forEach((egg, idx) => {
         const cost = eggCost(egg, game.worldIdx), ok = game.points >= cost;
         let odds = egg.pets.map(p => { const r=RARITY[p.rarity];
@@ -2489,9 +2556,25 @@ function playHatchTurbo(pet, egg) {
 
 function commitHatchPet(pet) {
     if (!pet) return;
+    if (typeof rollPetTrait === "function") rollPetTrait(pet);
     const exists = (game.pets || []).some(p => p.id === pet.id);
     if (!exists) game.pets.push(pet);
     game.discovered[dexKey(game.worldIdx, pet.name)] = true;
+    if (typeof savePhotoHatch === "function") savePhotoHatch(pet);
+    if (typeof trackStat === "function") {
+        trackStat("totalHatches", 1);
+        if (typeof ensureMeta === "function") {
+            const qs = ensureMeta().quests.session;
+            if (qs) qs.hatchesSession = (qs.hatchesSession || 0) + 1;
+            const tier = (RARITY[pet.rarity] || RARITY.common).tier;
+            if (tier >= 4) trackStat("legendariesHatched", 1);
+            if (tier >= 5) {
+                trackStat("secretsHatched", 1);
+                if (qs) qs.legendSession = (qs.legendSession || 0) + 1;
+            }
+        }
+        if (typeof maybeRefreshQuests === "function") maybeRefreshQuests();
+    }
 }
 
 function playHatch(pet, egg) {
@@ -3003,6 +3086,14 @@ function updateDisplay() {
     setTxt("rebirths", String(game.rebirths || 0));
     setTxt("aura-mini", "✦ " + fmt(game.aura));
     if (WORLDS[game.worldIdx]) setTxt("world-name", WORLDS[game.worldIdx].name);
+    if (typeof brainrotTitle === "function") setTxt("brainrot-title", brainrotTitle());
+    if (typeof brainrotLevel === "function") {
+        const bl = brainrotLevel();
+        const bar = byId("brainrot-fill");
+        if (bar) bar.style.width = Math.min(100, bl) + "%";
+        setTxt("brainrot-lvl", "Lv " + bl);
+    }
+    if (typeof renderInvasionHud === "function") renderInvasionHud();
     const rb = byId("rebirth-btn");
     if (rb) {
         const cost = getRebirthCost();
@@ -3066,6 +3157,7 @@ function initGame() {
     startAmbientParticles();
     startAmbientEffects();
     addCornerGlows();
+    if (typeof initMeta === "function") initMeta();
 }
 
 // ============================================================

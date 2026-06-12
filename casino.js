@@ -95,6 +95,7 @@ function registerGamble() {
     c.dailyGambles++;
     c.sessionGambles++;
     c.auraTaxStacks = Math.min(8, (c.auraTaxStacks || 0) + 1);
+    if (typeof trackStat === "function") trackStat("gambles", 1);
 }
 
 function casinoPassiveMult() {
@@ -425,6 +426,7 @@ function resolveScratchJackpot(hint) {
     c.eggDiscountPct = 0.12;
     c.eggDiscountUntil = Date.now() + 4 * 60 * 1000;
     if (hint) hint.textContent = "✨ JACKPOT! " + msg;
+    if (typeof trackStat === "function") trackStat("scratchWins", 1);
     showToast("🎉 JACKPOT! " + msg, 3200);
     sfxRare(4); shake();
     saveGame(); updateDisplay();
@@ -484,6 +486,7 @@ function pickMine(i) {
         c.minesCooldownUntil = Date.now() + 3 * 60 * 1000;
         showToast("💥 BOOM! Ohio got you.", 2800);
         screenFlash("#ff2020");
+        if (typeof trackStat === "function") trackStat("minesLost", 1);
         if (Math.random() < 0.4) showToast("👻 You would have had x" + (st.mult * 1.6).toFixed(1) + " if you stopped...", 3200);
         saveGame(); renderMinesBoard();
         casinoDefer(casinoSession, closeCasinoModal, 2800);
@@ -502,6 +505,14 @@ function cashOutMines() {
     if (!st || !st.alive) return;
     const payout = Math.max(1, Math.floor(st.bet * st.mult * 0.88));
     grantChips(payout, "mines cashout");
+    if (typeof trackStat === "function") {
+        trackStat("minesWon", 1);
+        if (typeof ensureMeta === "function") {
+            const qs = ensureMeta().quests.session;
+            if (qs) qs.minesWonSession = (qs.minesWonSession || 0) + 1;
+        }
+        if (typeof maybeRefreshQuests === "function") maybeRefreshQuests();
+    }
     c.minesActive = false;
     c.minesCooldownUntil = Date.now() + 90 * 1000;
     st.alive = false;
@@ -522,6 +533,7 @@ function openCrate() {
         if (!spendChips(cost)) { sfxError(); showToast("❌ Need " + cost + " Chips or a 🔑!", 2000); return; }
     }
     registerGamble();
+    if (typeof trackStat === "function") trackStat("crateOpens", 1);
     saveGame(); updateDisplay();
     const won = rollCrateItem(false);
     const near = won.tier < 5 && Math.random() < 0.34;
@@ -724,6 +736,7 @@ function spinWheel(fromAd) {
         registerGamble();
     }
     c.wheelSpins++;
+    if (typeof trackStat === "function") trackStat("wheelSpins", 1);
     const totalW = WHEEL_SEGMENTS.reduce((s, x) => s + x.weight, 0);
 
     // pick winner + compute its mid-angle so the pointer lands on it
