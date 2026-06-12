@@ -21,6 +21,7 @@ function freshGameState() {
         auraUpgrades: {},
         discovered: {},
         redeemedCodes: {},
+        casino: null,
         lastSeen: Date.now(),
         settings: {
             musicVol: 0.35, sfxVol: 0.70,
@@ -185,7 +186,7 @@ function applyChromeIcons() {
     if (main) main.outerHTML = iconHTML("💨", "main-icon-img", "Click");
     const offline = document.querySelector(".offline-icon-img");
     if (offline) offline.outerHTML = iconHTML("💨", "offline-icon-img", "Offline stink");
-    [["upgrades","🛒"],["pets","🐾"],["worlds","🌍"],["aura","✦"]].forEach(([sheet, emoji]) => {
+    [["upgrades","🛒"],["pets","🐾"],["casino","💎"],["worlds","🌍"],["aura","✦"]].forEach(([sheet, emoji]) => {
         const wrap = document.querySelector('.nav-btn[data-sheet="' + sheet + '"] .nav-ico');
         if (wrap) wrap.innerHTML = iconHTML(emoji, "nav-icon-img", sheet);
     });
@@ -239,6 +240,38 @@ const UPGRADES = [
     { name: "Omega Stench Engine",baseCost: 340000000000000000,passivePower:42000000000000,type:"passive",icon: "👑" }
 ];
 
+const UPGRADE_GROWTH = 1.28;
+(function appendLateUpgrades() {
+    const clickExt = [
+        ["Mogger Mist","🌫️"],["NPC Blaster","🤖"],["Drip Cannon","💅"],["Gyatt Laser","🍑"],["Ohio Railgun","🌽"],
+        ["Skibidi Reactor","🚽"],["Sigma Beam","😤"],["Grimace Core","🟣"],["Mewing Engine","😐"],["Rizz Laser","😎"],
+        ["Fanum Siphon","🍔"],["Toxic Surge","☣️"],["Void Punch","🕳️"],["Quantum Tap","⚛️"],["Neon Striker","🌟"],
+        ["Crystal Jab","💎"],["Inferno Fist","🔥"],["Galaxy Smack","🌌"],["Time Ripper","⏳"],["Final Click","👑"],
+        ["Ultra Mogger","💪"],["Brainrot Beam","🧠"],["NPC Eraser","🧟"],["Ohio Finisher","🏆"],["Skibidi Ult","🌀"],
+        ["Sigma Finisher","🗿"],["Gyatt Nova","✨"],["Stench God","💨"],["Rizz Apocalypse","💞"],["Omega Tap","♾️"],["THE CLICK","🔱"]
+    ];
+    const passExt = [
+        ["Stink Drip","💧"],["Mold Farm","🍄"],["Vent Stack","🏭"],["Tornado Bank","🌪️"],["Reactor Hum","⚡"],
+        ["Black Hole ATM","🕳️"],["Galaxy Mint","🌌"],["Quantum Printer","💻"],["Neon Pipeline","🌟"],["Crystal Refinery","💎"],
+        ["Inferno Forge","🔥"],["Mirror Pump","🪞"],["Time Printer","⏳"],["Gigachad Reactor","🏋️"],["Final Mint","👑"],
+        ["Ultra Vent","🌬️"],["Brainrot Reactor","🧠"],["Ohio Generator","🌽"],["Skibidi Plant","🚽"],["Sigma Engine","😤"],
+        ["Grimace Pump","🟣"],["Mewing Turbine","☁️"],["Void Siphon","🛸"],["Cosmic Hose","📡"],["Dimension Tap","🔄"],
+        ["Aura Forge","🔯"],["Stench Infinity","♾️"],["NPC Farm","🤖"],["Gyatt Generator","🍑"],["Omega Pump","💥"],["THE PASSIVE","🔱"]
+    ];
+    let cCost = 6e20, cPow = 8e10;
+    clickExt.forEach((pair, i) => {
+        UPGRADES.push({ name: pair[0], baseCost: Math.floor(cCost), clickPower: Math.floor(cPow), type: "click", icon: pair[1],
+            reqWorld: 2 + Math.floor(i / 2), reqRebirths: Math.floor(i / 3) });
+        cCost *= 5.5; cPow *= 3.8;
+    });
+    let pCost = 4e20, pPow = 5e9;
+    passExt.forEach((pair, i) => {
+        UPGRADES.push({ name: pair[0], baseCost: Math.floor(pCost), passivePower: Math.floor(pPow), type: "passive", icon: pair[1],
+            reqWorld: 2 + Math.floor(i / 2), reqRebirths: Math.floor(i / 3) });
+        pCost *= 5.8; pPow *= 4.0;
+    });
+})();
+
 const PET_SLOTS = [
     { slot: 4,  cost: 5000000,            reqRebirths: 1 },
     { slot: 5,  cost: 400000000,          reqRebirths: 3 },
@@ -271,7 +304,9 @@ const RARITY = {
     epic:      { label: "Epic",      color: "#b14eff", tier: 2 },
     legendary: { label: "Legendary", color: "#ffd54a", tier: 3 },
     mythic:    { label: "MYTHIC",    color: "#ff3d9a", tier: 4 },
-    secret:    { label: "✦ SECRET ✦",color: "#00ffd0", tier: 5 }
+    secret:    { label: "✦ SECRET ✦",color: "#00ffd0", tier: 5 },
+    ultra:     { label: "⚡ ULTRA ⚡", color: "#ff6b00", tier: 6 },
+    divine:    { label: "☄ DIVINE ☄", color: "#ffffff", tier: 7 }
 };
 
 // ---------- Per-world egg sets — each world has 3 unique eggs with unique pets ----------
@@ -418,21 +453,43 @@ function getEggTemplates() { return WORLD_EGGS[game.worldIdx] || WORLD_EGGS[0]; 
 
 function eggCost(t, world) {
     const w = Math.max(0, world || 0);
-    const base = t.baseCost * Math.pow(t.growth, w);
+    const base = t.baseCost * Math.pow(t.growth + 0.08, w);
     const unlockReq = (WORLDS[w] && WORLDS[w].reqRebirths) || 0;
-    const unlockPressure = 1 + unlockReq / 20;
-    const lateWorldPressure = Math.pow(1.55, (w * w) / 9);
-    const tierPressure = t.id === "legendary" ? (1 + w * 0.35) : (t.id === "rare" ? (1 + w * 0.18) : 1);
-    return Math.floor(base * unlockPressure * lateWorldPressure * tierPressure);
+    const unlockPressure = 1 + unlockReq / 12;
+    const lateWorldPressure = Math.pow(1.72, (w * w) / 8);
+    const tierPressure = t.id === "legendary" ? (1 + w * 0.55) : (t.id === "rare" ? (1 + w * 0.28) : (1 + w * 0.08));
+    const slope = Math.pow(1.09, w);
+    let cost = Math.floor(base * unlockPressure * lateWorldPressure * tierPressure * slope);
+    const disc = typeof casinoEggDiscount === "function" ? casinoEggDiscount() : 0;
+    if (disc > 0) cost = Math.floor(cost * (1 - disc));
+    return cost;
 }
-// pet power: flatter base values, gentler world scaling
-function petPower(base, world) { return +(Math.sqrt(base) * Math.pow(1.15, world)).toFixed(2); }
+function petPower(base, world) {
+    return +(Math.pow(base, 0.42) * Math.pow(1.11, world)).toFixed(2);
+}
+function scaleEggPets(egg) {
+    const w = game.worldIdx || 0;
+    const pressure = Math.pow(1.16, w);
+    const scaled = egg.pets.map(p => {
+        const tier = (RARITY[p.rarity] || RARITY.common).tier;
+        let odds = p.odds;
+        if (tier >= 7) odds = Math.max(0.01, odds / (pressure * 8));
+        else if (tier >= 6) odds = Math.max(0.03, odds / (pressure * 6));
+        else if (tier >= 5) odds = Math.max(0.05, odds / (pressure * 4.5));
+        else if (tier >= 4) odds = Math.max(0.15, odds / (pressure * 2.8));
+        else if (tier >= 3) odds = Math.max(0.8, odds / (pressure * 1.6));
+        else if (tier >= 2) odds = Math.max(4, odds / (pressure * 1.2));
+        return Object.assign({}, p, { odds: odds });
+    });
+    const sum = scaled.reduce((s, p) => s + p.odds, 0);
+    return scaled.map(p => Object.assign({}, p, { odds: +(p.odds * 100 / sum).toFixed(3) }));
+}
 function rollBestFromEgg(egg) {
-    const tries = 1 + Math.min(auraLevel("luck"), 5);
+    const tries = 1 + Math.min(auraLevel("luck"), 4);
     let chosen = pickFromEgg(egg);
     for (let k = 1; k < tries; k++) {
         const c = pickFromEgg(egg);
-        if (RARITY[c.rarity].tier > RARITY[chosen.rarity].tier) chosen = c;
+        if ((RARITY[c.rarity] || RARITY.common).tier > (RARITY[chosen.rarity] || RARITY.common).tier) chosen = c;
     }
     return chosen;
 }
@@ -1150,13 +1207,21 @@ function dexBonus() { return 1 + completedWorlds() * 0.03; } // +3% per fully-de
 
 function getClickPower() {
     let p = game.baseClickPower || 1;
-    UPGRADES.forEach((u, i) => { if (u.type === "click" && game.upgrades[i]) p += (u.clickPower||0) * game.upgrades[i]; });
+    UPGRADES.forEach((u, i) => {
+        if (u.type === "click" && game.upgrades[i] && upgradeUnlocked(u)) p += (u.clickPower || 0) * game.upgrades[i];
+    });
     return p * rebirthBonus() * auraMult("click") * dexBonus();
 }
 function getPassive() {
     let p = 0;
-    UPGRADES.forEach((u, i) => { if (u.type === "passive" && game.upgrades[i]) p += (u.passivePower||0) * game.upgrades[i]; });
+    UPGRADES.forEach((u, i) => {
+        if (u.type === "passive" && game.upgrades[i] && upgradeUnlocked(u)) p += (u.passivePower || 0) * game.upgrades[i];
+    });
+    p *= (typeof casinoPassiveMult === "function" ? casinoPassiveMult() : 1);
     return p * rebirthBonus() * auraMult("passive") * dexBonus();
+}
+function upgradeUnlocked(u) {
+    return (game.worldIdx || 0) >= (u.reqWorld || 0) && (game.rebirths || 0) >= (u.reqRebirths || 0);
 }
 function getPetMult() {
     // additive stacking so 3 pets don't multiply into insane numbers
@@ -1166,9 +1231,10 @@ function getPetMult() {
 }
 function upgradeCost(i) {
     const u = UPGRADES[i]; if (!u) return Infinity;
-    return Math.floor(u.baseCost * Math.pow(1.15, game.upgrades[i] || 0));
+    const lvl = game.upgrades[i] || 0;
+    return Math.floor(u.baseCost * Math.pow(UPGRADE_GROWTH, lvl) * (1 + lvl * 0.018));
 }
-function getRebirthCost() { return 5000000 * Math.pow(4, game.rebirths || 0); }
+function getRebirthCost() { return Math.floor(12000000 * Math.pow(4.9, game.rebirths || 0)); }
 function auraGainPreview() {
     return Math.max(1, Math.floor(Math.pow(game.rebirths + 1, 1.35) * auraMult("auragain")));
 }
@@ -1186,7 +1252,7 @@ function initUpgrades() {
 // ============================================================
 //  SAVE / LOAD (+ offline earnings)
 // ============================================================
-const SAVE_KEY = "fartSave_v6";
+const SAVE_KEY = "fartSave_v7";
 let offlinePending = 0;
 
 function clearAllSaveData() {
@@ -1210,6 +1276,8 @@ function sanitizeGameState() {
     if (typeof game.aura !== "number" || isNaN(game.aura) || game.aura < 0) game.aura = 0;
     if (!game.auraUpgrades || typeof game.auraUpgrades !== "object") game.auraUpgrades = {};
     if (!game.redeemedCodes || typeof game.redeemedCodes !== "object") game.redeemedCodes = {};
+    if (!game.casino && typeof freshCasinoState === "function") game.casino = freshCasinoState();
+    else if (!game.casino) game.casino = { secretShards: 0, lastWheelSpin: 0, slotBuffUntil: 0, slotBuffMult: 1, goldenBuffUntil: 0, goldenBuffMult: 1, eggDiscountUntil: 0, eggDiscountPct: 0, scratchPity: 0, lootPity: 0, totalGambles: 0 };
     AURA_UPGRADES.forEach((u, i) => {
         let lvl = game.auraUpgrades[i] || 0;
         if (typeof lvl !== "number" || isNaN(lvl) || lvl < 0) lvl = 0;
@@ -1346,7 +1414,7 @@ function maybeBrainrotPop() {
 }
 
 
-function levelCost(i, lvl) { return Math.floor(UPGRADES[i].baseCost * Math.pow(1.15, lvl)); }
+function levelCost(i, lvl) { return Math.floor(UPGRADES[i].baseCost * Math.pow(UPGRADE_GROWTH, lvl) * (1 + lvl * 0.018)); }
 // how many levels you'd buy in current mode, and total cost
 function bulkInfo(i) {
     const cur = game.upgrades[i] || 0;
@@ -1355,7 +1423,7 @@ function bulkInfo(i) {
     if (buyMode === "max") {
         const first = levelCost(i, cur);
         if (!isFinite(first) || first <= 0 || game.points < first) return { count: 0, total: first, affordable: false };
-        const growth = 1.15;
+        const growth = UPGRADE_GROWTH;
         count = Math.min(cap, Math.max(1, Math.floor(Math.log(game.points * (growth - 1) / first + 1) / Math.log(growth))));
         total = first * (Math.pow(growth, count) - 1) / (growth - 1);
         while (count > 0 && total > game.points) {
@@ -1378,6 +1446,11 @@ function bulkInfo(i) {
 }
 function upCard(i) {
     const u = UPGRADES[i], lvl = game.upgrades[i] || 0;
+    if (!upgradeUnlocked(u)) {
+        const need = (u.reqWorld || 0) > (game.worldIdx || 0) ? ("World " + (WORLDS[u.reqWorld] ? WORLDS[u.reqWorld].name : u.reqWorld)) : (u.reqRebirths + " rebirths");
+        return '<button class="up-card locked" disabled><div class="up-ico">' + iconHTML(u.icon, "up-ico-img", u.name) + '</div>' +
+            '<div class="up-mid"><div class="up-name">' + u.name + '</div><div class="up-stat">🔒 Unlock: ' + need + '</div></div></button>';
+    }
     const info = bulkInfo(i);
     const ok = info.affordable && info.count > 0;
     const stat = u.type === "click" ? "+" + fmt(u.clickPower) + " / click" : "+" + fmt(u.passivePower) + " / sec";
@@ -1411,7 +1484,7 @@ function renderUpgradeTabs() {
 //  BUYING
 // ============================================================
 function buyUpgrade(i) {
-    const u = UPGRADES[i]; if (!u) return;
+    const u = UPGRADES[i]; if (!u || !upgradeUnlocked(u)) return;
     const info = bulkInfo(i);
     if (info.count > 0 && info.affordable && game.points >= info.total) {
         game.points -= info.total; game.upgrades[i] = (game.upgrades[i] || 0) + info.count;
@@ -1446,6 +1519,7 @@ function openSheet(name) {
     if (name === "pets") renderPetSheet();
     if (name === "worlds") renderWorlds();
     if (name === "aura") renderAura();
+    if (name === "casino") renderCasino();
     if (name === "settings") syncSettingsUI();
     overlay.classList.add("visible"); sheet.classList.add("open");
     // highlight the active nav button
@@ -2075,8 +2149,9 @@ function rollEggMulti(idx, count) {
     playHatch(results[0].pet, results[0].egg);
 }
 function pickFromEgg(egg) {
-    let roll = Math.random() * 100, chosen = egg.pets[0];
-    for (const p of egg.pets) { if (roll < p.odds) { chosen = p; break; } roll -= p.odds; }
+    const pets = scaleEggPets(egg);
+    let roll = Math.random() * 100, chosen = pets[0];
+    for (const p of pets) { if (roll < p.odds) { chosen = p; break; } roll -= p.odds; }
     return chosen;
 }
 function rollEgg(idx) {
@@ -2575,7 +2650,7 @@ function spawnGoldenFart() {
     layer.appendChild(el);
     requestAnimationFrame(() => { el.style.left = "112%"; });
     el.onclick = () => {
-        const goldMult = 1 + auraLevel("golden") * 0.5;
+        const goldMult = (1 + auraLevel("golden") * 0.5) * (typeof casinoGoldenMult === "function" ? casinoGoldenMult() : 1);
         // world scaling: each world makes golden farts exponentially more valuable
         const worldScale = Math.pow(1.6, game.worldIdx || 0);
         // reward = 5 minutes passive OR 1000 clicks, whichever bigger, times world scale

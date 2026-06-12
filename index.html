@@ -55,6 +55,7 @@
     <nav class="bottom-nav">
         <button class="nav-btn" data-sheet="upgrades" onclick="openSheet('upgrades')"><span class="nav-ico"><span class="game-icon nav-icon-img" style="--ix:1;--iy:0" role="img" aria-label="Upgrades"></span></span><span class="nav-txt">Upgrades</span></button>
         <button class="nav-btn" data-sheet="pets" onclick="openSheet('pets')"><span class="nav-ico"><span class="game-icon nav-icon-img" style="--ix:2;--iy:0" role="img" aria-label="Pets"></span></span><span class="nav-txt">Pets</span></button>
+        <button class="nav-btn" data-sheet="casino" onclick="openSheet('casino')"><span class="nav-ico"><span class="game-icon nav-icon-img" style="--ix:1;--iy:0" role="img" aria-label="Casino"></span></span><span class="nav-txt">Casino</span></button>
         <button class="nav-btn" data-sheet="worlds" onclick="openSheet('worlds')"><span class="nav-ico"><span class="game-icon nav-icon-img" style="--ix:3;--iy:0" role="img" aria-label="Worlds"></span></span><span class="nav-txt">Worlds</span></button>
         <button class="nav-btn" data-sheet="aura" onclick="openSheet('aura')"><span class="nav-ico"><span class="game-icon nav-icon-img" style="--ix:4;--iy:0" role="img" aria-label="Aura"></span></span><span class="nav-txt">Aura</span></button>
     </nav>
@@ -93,6 +94,12 @@
             <button class="stab" onclick="showPetTab('index', this)">📖 Index</button>
         </div>
         <div class="sheet-body" id="pets-body"></div>
+    </div>
+
+    <!-- Casino Sheet -->
+    <div class="sheet" id="sheet-casino">
+        <div class="sheet-head"><h2>🎰 Stink Casino</h2><button class="sheet-close" onclick="closeSheet()">&times;</button></div>
+        <div class="sheet-body" id="casino-body"></div>
     </div>
 
     <!-- Worlds Sheet -->
@@ -189,5 +196,6 @@
     </div>
 
     <script src="script.js"></script>
+    <script src="casino.js"></script>
 </body>
 </html>
