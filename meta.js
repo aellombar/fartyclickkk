@@ -10,7 +10,7 @@ function freshMetaState() {
             totalClicks: 0, totalHatches: 0, totalRebirths: 0, totalAscensions: 0,
             minesLost: 0, minesWon: 0, wheelSpins: 0, scratchWins: 0, crateOpens: 0,
             gambles: 0, stocksTrades: 0, gardenHarvests: 0, invasionWins: 0,
-            secretsFound: 0, bankruptcies: 0, legendariesHatched: 0, secretsHatched: 0,
+            secretsFound: 0, bankruptcies: 0, diamondHands: 0, legendariesHatched: 0, secretsHatched: 0,
             petsFused: 0, questTokens: 0, hiddenClicks: 0, toiletClicks: 0
         },
         buildings: {},
@@ -93,6 +93,7 @@ function buildAchievementList() {
     [1,3,5,10].forEach((t, i) =>
         add("inv_" + t, "Defend " + t, "Win invasions " + t, "invasionWins", t, 2 + i * 0.5));
     add("bankrupt_1", "Bankrupt", "Go bankrupt in stocks", "bankruptcies", 1, 3);
+    add("diamond_hands", "Diamond Hands", "Hold stocks through a crash event", "diamondHands", 1, 4);
     add("toilet_1000", "Skibidi Scholar", "Click toilet 1000× in Skibidi world", "toiletClicks", 1000, 8, { luck: 0.03 });
     add("hidden_20", "Easter Hunter", "Find 20 hidden secrets", "secretsFound", 20, 6);
     add("konami_1", "Konami Code", "Enter the konami code", "konamiUnlocked", 1, 5);
@@ -393,6 +394,7 @@ function plantGarden(idx, seedId) {
     plot.plantedAt = Date.now();
     const growMult = ascensionMutatorMult("garden");
     plot.readyAt = plot.plantedAt + (GARDEN_SEEDS.find(s => s.id === seedId)?.growMs || 60000) / (growMult > 1 ? growMult : 1);
+    if (typeof tryGardenCrossbreed === "function") tryGardenCrossbreed(idx);
     sfxBuy(); saveGame(); renderGarden();
 }
 
@@ -457,6 +459,11 @@ function tickStocks() {
         if (Math.random() < 0.04) {
             const news = ["Ohio incident", "Skibidi rally", "Rizz collapse", "Stink IPO"];
             showToast("📰 " + news[Math.floor(Math.random() * news.length)] + " — $" + t + "!", 2200);
+            const held = m.stocks.holdings[t] || 0;
+            if (held > 0) {
+                m.stocks.crashHeld = true;
+                trackStat("diamondHands", 1);
+            }
             m.stocks.prices[t] *= 0.6 + Math.random() * 0.8;
         } else {
             m.stocks.prices[t] = Math.max(1, m.stocks.prices[t] * (1 + shock));
@@ -474,6 +481,7 @@ function buyStock(ticker, amt) {
     if (game.points < cost) { sfxError(); return; }
     game.points -= cost;
     m.stocks.holdings[ticker] = (m.stocks.holdings[ticker] || 0) + amt;
+    if (typeof recordStockBuy === "function") recordStockBuy(ticker, amt, price);
     trackStat("stocksTrades", 1);
     saveGame(); renderStocks();
 }
@@ -507,6 +515,11 @@ function renderStocks() {
             '<button onclick="sellStock(\'' + t + '\',1)">Sell</button></div>';
     });
     html += '<div id="stock-sparkline"></div>';
+    if (typeof stockPortfolioPl === "function") {
+        const pl = stockPortfolioPl();
+        const sign = pl.pl >= 0 ? "+" : "";
+        html += '<p class="meta-hint">Portfolio: ' + fmt(pl.value) + ' · P/L: <b style="color:' + (pl.pl >= 0 ? "#7fff00" : "#ff3d9a") + '">' + sign + fmt(pl.pl) + '</b></p>';
+    }
     html += '<button class="meta-btn danger" onclick="sellAllStocksPanic()">💀 PANIC SELL ALL</button>';
     html += '<button class="meta-btn danger" onclick="declareBankruptcy()">📉 Declare Bankruptcy</button>';
     el.innerHTML = html;
@@ -606,6 +619,7 @@ function completeQuest(q) {
     if (q.reward.chips) grantChips(q.reward.chips, "quest");
     if (q.reward.tokens) { ensureMeta().quests.tokens = (ensureMeta().quests.tokens || 0) + q.reward.tokens; }
     if (q.reward.key && game.casino) game.casino.crateKeys = (game.casino.crateKeys || 0) + q.reward.key;
+    if (typeof addSeasonXp === "function") addSeasonXp(15);
     showToast("✅ Quest: " + q.label, 2800);
     saveGame();
 }
@@ -741,8 +755,10 @@ function maybeStartInvasion() {
     if (m.invasion && m.invasion.ends > Date.now()) return;
     if (m.invasionEnded && Date.now() - m.invasionEnded < 300000) return;
     if (Math.random() > 0.0008) return;
-    const maxHp = 5000 + brainrotLevel() * 200;
-    m.invasion = { hp: maxHp, max: maxHp, ends: Date.now() + 120000, dps: 0 };
+    const wave = (ensureFeatures().invasionWave || 0) + 1;
+    if (typeof ensureFeatures === "function") ensureFeatures().invasionWave = wave;
+    const maxHp = (5000 + brainrotLevel() * 200) * (1 + wave * 0.15);
+    m.invasion = { hp: maxHp, max: maxHp, ends: Date.now() + 120000, dps: 0, wave: wave };
     showToast("🚨 SKIBIDI WAVE INCOMING!", 3500);
     bigBanner("INVASION!", "#ff3030");
 }
@@ -762,7 +778,8 @@ function invasionClick(dmg) {
         if (typeof recordInvasionScore === "function") recordInvasionScore(reward);
         m.invasion = null;
         m.invasionEnded = Date.now();
-        showToast("🛡️ Invasion repelled! +" + fmt(reward), 3000);
+        const rank = typeof invasionRankTitle === "function" ? invasionRankTitle() : null;
+        showToast("🛡️ Invasion repelled! +" + fmt(reward) + (rank ? " · " + rank : ""), 3000);
         checkAchievements();
     }
     saveGame();
@@ -905,7 +922,7 @@ function exportPhotoCard() {
 
 function savePhotoHatch(pet) {
     const r = RARITY[pet.rarity] || RARITY.common;
-    window._lastHatchPhoto = { name: pet.name, emoji: pet.emoji, rarity: r.label, color: r.color };
+    window._lastHatchPhoto = { id: pet.id, name: pet.name, emoji: pet.emoji, rarity: r.label, color: r.color };
 }
 
 // ---------- HUB RENDER ----------
@@ -963,6 +980,16 @@ function initMeta() {
         }
     }
     setInterval(() => {
+        if (typeof gardenUnlocked === "function" && gardenUnlocked()) {
+            initGardenPlots();
+            const ready = ensureMeta().garden.plots.some(p => p.seed && Date.now() >= (p.readyAt || 0));
+            if (ready && !window._gardenNotified) {
+                window._gardenNotified = true;
+                if (typeof pushNotifyStub === "function") pushNotifyStub("Garden crop ready to harvest!");
+                showToast("🌱 Garden crop ready!", 2200);
+            }
+            if (!ready) window._gardenNotified = false;
+        }
         tickStocks();
         maybeStartInvasion();
         const toilet = document.getElementById("toilet-secret");

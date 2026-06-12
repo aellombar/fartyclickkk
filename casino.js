@@ -228,9 +228,10 @@ function renderCasino() {
             ? '<button class="casino-shard-btn" onclick="redeemSecretShards()">💎 Redeem 10 Shards → Secret Pet</button>'
             : '<p class="casino-shard-hint">Jackpots drop 💎 shards · 10 = guaranteed secret pet</p>') +
         (highRollerUnlocked()
-            ? '<button class="casino-shard-btn high-roller-card" onclick="toggleHighRoller()">' +
+            ? '<button class="casino-shard-btn high-roller-card" onclick="toggleHighRoller()" title="5% Aura tax on entry · better crate odds">' +
               (c.highRoller ? "🎩 High-Roller ON · Aura tax active" : "🎩 Enter High-Roller Room (50+ rebirths)") +
-              '</button>'
+              '</button>' + (typeof highRollerOddsHtml === "function" ? highRollerOddsHtml() : "") +
+            (c.highRoller ? '<button class="casino-shard-btn" onclick="buyVipScratch()">🎫 VIP Scratch 5×5 · ' + (chipPrice("scratch") * 3) + " " + chipIcon() + '</button>' : '')
             : '') +
         (c.casinoStreak > 1 ? '<div class="casino-streak-pill">🔥 Casino streak: ' + c.casinoStreak + ' days</div>' : '') +
         '<p class="casino-disclaimer">⚠️ Chips are scarce. Near-misses intentional. Gambling taxes Aura rebirth.</p>';
@@ -275,6 +276,15 @@ function closeCasinoModal() {
     if (window._scratchCleanup) { window._scratchCleanup(); window._scratchCleanup = null; }
 }
 
+function buyVipScratch() {
+    if (!ensureCasino().highRoller) { showToast("Enter High-Roller first!", 2000); return; }
+    if (!canGamble()) return;
+    const cost = chipPrice("scratch") * 3;
+    if (!spendChips(cost)) { sfxError(); showToast("Need " + cost + " chips!", 2000); return; }
+    registerGamble();
+    startScratchCanvas(cost, 5, 5);
+}
+
 /* ---- CANVAS SCRATCH (4×3 grid) ---- */
 function buyScratch() {
     if (!casinoUnlocked("scratch")) { sfxError(); return; }
@@ -284,11 +294,12 @@ function buyScratch() {
     registerGamble();
     ensureCasino().scratchPity++;
     saveGame(); updateDisplay();
-    startScratchCanvas(cost);
+    startScratchCanvas(cost, 4, 3);
 }
 
-function startScratchCanvas(betChips) {
-    const cols = 4, rows = 3;
+function startScratchCanvas(betChips, cols, rows) {
+    cols = cols || 4;
+    rows = rows || 3;
     const c = ensureCasino();
     const forceJackpot = c.scratchPity >= 22;
     const forceNearMiss = !forceJackpot && Math.random() < 0.36;
@@ -325,6 +336,7 @@ function startScratchCanvas(betChips) {
     window._scratchBet = betChips;
     window._scratchDone = false;
     window._scratchCols = cols;
+    window._scratchRevealPct = 0;
     requestAnimationFrame(initScratchCanvas);
 }
 
@@ -408,7 +420,9 @@ function initScratchCanvas() {
         if (now - lastSampleAt > 90) {
             lastSampleAt = now;
             sfxClick();
-            if (!window._scratchDone && scratchedFraction() >= 0.8) {
+            const frac = scratchedFraction();
+            window._scratchRevealPct = frac;
+            if (!window._scratchDone && frac >= 0.8) {
                 autoRevealScratch();
             }
         }
@@ -477,6 +491,7 @@ function autoRevealScratch() {
     } else if (near) {
         const grid = document.getElementById("scratch-sym-grid");
         if (grid) grid.classList.add("near-miss");
+        if (typeof hapticTap === "function") hapticTap("rare");
         if (hint) hint.textContent = "😭 SO CLOSE — 3 in a row but not 4!";
         showToast("Near miss! The foil knew.", 2800);
         screenFlash("#ff3d9a");
@@ -492,6 +507,10 @@ function autoRevealScratch() {
 
 function autoScratchReveal() {
     if (window._scratchDone) return;
+    if ((window._scratchRevealPct || 0) >= 0.8) {
+        autoRevealScratch();
+        return;
+    }
     const cost = (window._scratchBet || chipPrice("scratch")) * 2;
     if (!spendChips(cost)) { sfxError(); showToast("Need " + cost + " chips for auto-scratch!", 2000); return; }
     const canvas = document.getElementById("scratch-canvas");
@@ -560,6 +579,36 @@ function toggleMinesFlagMode() {
     renderMinesBoard();
 }
 
+function minesAdjacentCount(i, st) {
+    const size = st.size;
+    const r = Math.floor(i / size), c = i % size;
+    let n = 0;
+    for (let dr = -1; dr <= 1; dr++) {
+        for (let dc = -1; dc <= 1; dc++) {
+            if (!dr && !dc) continue;
+            const nr = r + dr, nc = c + dc;
+            if (nr < 0 || nc < 0 || nr >= size || nc >= size) continue;
+            const ni = nr * size + nc;
+            if (st.mines.has(ni)) n++;
+        }
+    }
+    return n;
+}
+
+let _mineLongPressTimer = null;
+function mineTileDown(i, e) {
+    if (minesFlagMode) return;
+    _mineLongPressTimer = setTimeout(() => {
+        minesFlagMode = true;
+        pickMine(i);
+        minesFlagMode = false;
+        showToast("🚩 Flag placed (long-press)", 1200);
+    }, 450);
+}
+function mineTileUp() {
+    if (_mineLongPressTimer) { clearTimeout(_mineLongPressTimer); _mineLongPressTimer = null; }
+}
+
 function renderMinesBoard() {
     const st = ensureCasino().minesState;
     if (!st) return;
@@ -577,9 +626,9 @@ function renderMinesBoard() {
         let cls = "mine-tile" + (flagged ? " flagged" : "");
         if (rev) {
             cls += isMine ? " boom" : " safe";
-            inner = isMine ? "💣" : "💎";
+            inner = isMine ? "💣" : (minesAdjacentCount(i, st) || "💎");
         }
-        html += '<button class="' + cls + '" onclick="pickMine(' + i + ')"' + (rev ? ' disabled' : '') + '>' + inner + '</button>';
+        html += '<button class="' + cls + '" onclick="pickMine(' + i + ')" onpointerdown="mineTileDown(' + i + ',event)" onpointerup="mineTileUp()" onpointerleave="mineTileUp()"' + (rev ? ' disabled' : '') + '>' + inner + '</button>';
     }
     html += '</div><button class="casino-shard-btn mines-cashout" onclick="cashOutMines()">💰 Cash Out</button>';
     openCasinoModal("💣 Stink Mines", html);
@@ -668,8 +717,13 @@ function openCrate() {
     ).join("");
     animateCrateStrip(stripEl, 28, 5.5);
     sfxWhoosh();
+    if (near && won.tier < 5) setTimeout(() => { if (typeof tone === "function") tone(880, 0.2, "sine", 0.08, 440); }, 5200);
     if (_crateSkipTimer) clearTimeout(_crateSkipTimer);
-    _crateSkipTimer = setTimeout(() => { _crateSkipTimer = null; resolveCrateWin(won); }, 5600);
+    if (game.settings.crateSkipAnim) {
+        setTimeout(() => skipCrateAnimation(), 400);
+    } else {
+        _crateSkipTimer = setTimeout(() => { _crateSkipTimer = null; resolveCrateWin(won); }, 5600);
+    }
 }
 
 function skipCrateAnimation() {

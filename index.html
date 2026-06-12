@@ -209,6 +209,15 @@
                 <label class="set-row"><span>🔍 UI scale</span><span id="ui-scale-val" class="set-val">100%</span></label>
                 <input type="range" id="ui-scale" min="90" max="110" value="100" class="slider" oninput="setUiScale(this.value)">
             </div>
+            <div class="set-group toggles">
+                <button class="toggle-row" id="tg-crate-skip" onclick="toggleSetting('crateSkipAnim', this)"><span>⏭ Always skip crate anim</span><span class="toggle-pill">OFF</span></button>
+                <button class="toggle-row" id="tg-hatch-sfx" onclick="toggleSetting('hatchSfxMute', this)"><span>🔇 Mute hatch SFX</span><span class="toggle-pill">OFF</span></button>
+                <button class="toggle-row" id="tg-no-autoperf" onclick="toggleSetting('disableAutoPerf', this)"><span>🚫 Disable auto perf mode</span><span class="toggle-pill">OFF</span></button>
+            </div>
+            <div class="set-group">
+                <button class="set-action" onclick="togglePhotoMode()">📷 Photo mode</button>
+                <p id="inset-docs" class="meta-hint" style="margin-top:8px;font-size:0.7rem"></p>
+            </div>
             <div class="set-group code-group">
                 <label class="set-row"><span>🎁 Codes</span><span class="set-val">Rewards</span></label>
                 <div class="code-row">
@@ -289,5 +298,6 @@
     <script src="casino.js"></script>
     <script src="meta.js"></script>
     <script src="features.js"></script>
+    <script src="phase3.js"></script>
 </body>
 </html>
