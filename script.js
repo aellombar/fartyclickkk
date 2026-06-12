@@ -451,6 +451,59 @@ WORLD_PET_THEMES.forEach((t, i) => {
     ];
 });
 
+// ---------- Per-world ULTRA (tier6) + DIVINE (tier7) pets — rarer than secret ----------
+// Rarity ladder per world: ... mythic < secret < ultra < divine
+const WORLD_APEX_PETS = [
+    { ultra:["Basement Phantom","🕳️"],   divine:["The Ancient Stink","👑"] },     // 0
+    { ultra:["Sewer Leviathan","🐉"],     divine:["Sewer Deity","🐲"] },           // 1
+    { ultra:["Skibidi Titan","🚽"],       divine:["Skibidi Overgod","🔱"] },       // 2
+    { ultra:["Rizz Emperor","😎"],        divine:["Rizz Deity","💞"] },            // 3
+    { ultra:["Ohio Anomaly","🌽"],        divine:["Ohio Eldritch God","👁️"] },     // 4
+    { ultra:["Cosmic Devourer","🌌"],     divine:["Universe Eater","🌠"] },        // 5
+    { ultra:["Canyon Behemoth","🏔️"],     divine:["Canyon God-King","⛰️"] },       // 6
+    { ultra:["Hellfire Sovereign","👹"],  divine:["Lord of Cinders","😈"] },       // 7
+    { ultra:["Sigma Overlord","🗿"],      divine:["The Sigma Prime","♾️"] },        // 8
+    { ultra:["Void Sovereign","🛸"],      divine:["Reality Architect","🌀"] },     // 9
+    { ultra:["Quantum Singularity","⚛️"], divine:["The Final Particle","💫"] },     // 10
+    { ultra:["Grimace Overlord","🟣"],    divine:["Grimace Prime","🔮"] },         // 11
+    { ultra:["Cloud Sovereign","☁️"],     divine:["Ascended Mewer","🕊️"] },        // 12
+    { ultra:["Inferno Tyrant","🔥"],      divine:["Eternal Inferno","💀"] },       // 13
+    { ultra:["Crystal Monarch","💎"],     divine:["Diamond Godhead","🔱"] },       // 14
+    { ultra:["Mirror Sovereign","🪞"],    divine:["The True Reflection","✨"] },    // 15
+    { ultra:["Galactic Emperor","🌌"],    divine:["Heart of the Cosmos","⭐"] },    // 16
+    { ultra:["Chrono Sovereign","⏳"],    divine:["Master of Eternity","🕰️"] },    // 17
+    { ultra:["Gigachad Titan","💪"],      divine:["THE OMEGA CHAD","🏆"] },        // 18
+    { ultra:["Stench Overlord","👑"],     divine:["THE FINAL STENCH GOD","♾️"] },   // 19
+];
+(function appendApexPets() {
+    for (let w = 0; w < WORLD_EGGS.length; w++) {
+        const eggs = WORLD_EGGS[w];
+        if (!eggs || !eggs.length) continue;
+        const apex = WORLD_APEX_PETS[w] || WORLD_APEX_PETS[0];
+        const legendaryEgg = eggs[eggs.length - 1];
+        if (!legendaryEgg || !legendaryEgg.pets) continue;
+        // scale base off the egg's strongest pet so apex pets are clearly best
+        const topBase = legendaryEgg.pets.reduce((m, p) => Math.max(m, p.base || 0), 1);
+        if (!legendaryEgg.pets.some(p => p.rarity === "ultra")) {
+            legendaryEgg.pets.push({ name: apex.ultra[0], emoji: apex.ultra[1], base: topBase * 2.2, odds: 0.18, rarity: "ultra" });
+        }
+        if (!legendaryEgg.pets.some(p => p.rarity === "divine")) {
+            legendaryEgg.pets.push({ name: apex.divine[0], emoji: apex.divine[1], base: topBase * 5.0, odds: 0.025, rarity: "divine" });
+        }
+    }
+})();
+
+// Top-tier pet template for a world (for casino jackpots / wheel)
+function worldApexTemplate(worldIdx, wantDivine) {
+    const w = Math.max(0, Math.min(WORLD_APEX_PETS.length - 1, worldIdx || 0));
+    const apex = WORLD_APEX_PETS[w];
+    const eggs = WORLD_EGGS[w] || WORLD_EGGS[0];
+    const legendaryEgg = eggs[eggs.length - 1];
+    const topBase = legendaryEgg.pets.reduce((m, p) => Math.max(m, p.base || 0), 1);
+    if (wantDivine) return { name: apex.divine[0], emoji: apex.divine[1], rarity: "divine", base: topBase * 5.0 };
+    return { name: apex.ultra[0], emoji: apex.ultra[1], rarity: "ultra", base: topBase * 2.2 };
+}
+
 // Current world's egg templates
 function getEggTemplates() { return WORLD_EGGS[game.worldIdx] || WORLD_EGGS[0]; }
 
@@ -954,15 +1007,26 @@ const WORLD_SONGS = [
 
 // ---------- Section structure (bars per section, repeating song form) ----------
 // Form: intro(4) → verse(8) → chorus(8) → verse(8) → bridge(4) → chorus(8) → outro(4) = 44 bars ~3min
-const SONG_FORM = [
-    { section: 0, bars: 4  },  // intro  (sparse melody 0)
-    { section: 1, bars: 8  },  // verse  (melody 1, light drums)
-    { section: 2, bars: 8  },  // chorus (melody 2, full drums)
-    { section: 1, bars: 8  },  // verse2 (melody 1)
-    { section: 3, bars: 4  },  // bridge (melody 3, minimal drums)
-    { section: 2, bars: 8  },  // chorus2(melody 2, full drums)
-    { section: 0, bars: 4  },  // outro  (melody 0, fade)
-]; // total 44 bars, then loops
+// Multiple song structures so worlds don't all feel identical
+const SONG_FORMS = [
+    // 0 — classic pop (intro/verse/chorus)
+    [ {section:0,bars:4},{section:1,bars:8},{section:2,bars:8},{section:1,bars:8},{section:3,bars:4},{section:2,bars:8},{section:0,bars:4} ],
+    // 1 — chorus-heavy banger
+    [ {section:2,bars:4},{section:1,bars:4},{section:2,bars:8},{section:3,bars:4},{section:2,bars:8},{section:2,bars:4} ],
+    // 2 — ambient slow burn
+    [ {section:0,bars:8},{section:3,bars:8},{section:1,bars:8},{section:0,bars:8},{section:1,bars:8} ],
+    // 3 — call & response
+    [ {section:1,bars:4},{section:2,bars:4},{section:1,bars:4},{section:2,bars:4},{section:3,bars:4},{section:0,bars:4},{section:2,bars:8} ],
+    // 4 — relentless (final worlds)
+    [ {section:2,bars:8},{section:2,bars:4},{section:1,bars:4},{section:2,bars:8},{section:2,bars:4} ],
+];
+function activeSongForm() {
+    const set = WORLD_TRACK_SETS[game.worldIdx % WORLD_TRACK_SETS.length] || WORLD_TRACK_SETS[0];
+    const track = set[PHONK.trackIdx % 3] || set[0];
+    return SONG_FORMS[track.formIdx || 0];
+}
+function songFormBars(form) { return form.reduce((s, x) => s + x.bars, 0); }
+const SONG_FORM = SONG_FORMS[0]; // legacy fallback
 
 const WORLD_TRACK_NAMES = [
     ["Basement Dreams", "Moldy Lullaby", "Pipe Drip Echo"],
@@ -1077,6 +1141,12 @@ function buildWorldTrackSets() {
             const density = Math.min(1 + w * 0.06, 2.5);
             // Filter opens up in later worlds
             const filter = arc.filter + t * 200 + w * 15;
+            // form: ambient worlds use slow-burn, fast worlds use banger/relentless
+            let formIdx;
+            if (arc.drums === 0) formIdx = 2;            // ambient
+            else if (arc.bpmBase >= 100) formIdx = 4;    // relentless
+            else if (arc.bpmBase >= 88) formIdx = 1;     // banger
+            else formIdx = (w + t) % 2 === 0 ? 0 : 3;    // pop / call-response
             tracks.push({
                 name: WORLD_TRACK_NAMES[w][t],
                 bpm,
@@ -1090,6 +1160,7 @@ function buildWorldTrackSets() {
                 density,
                 reverb: arc.rev,
                 bassStyle: arc.bass,
+                formIdx,
             });
         }
         sets.push(tracks);
@@ -1106,13 +1177,15 @@ function getSong() {
 }
 
 function currentSection() {
-    let bar = PHONK.bars % 44;
+    const form = activeSongForm();
+    const total = songFormBars(form);
+    let bar = PHONK.bars % total;
     let acc = 0;
-    for (let i = 0; i < SONG_FORM.length; i++) {
-        acc += SONG_FORM[i].bars;
-        if (bar < acc) return SONG_FORM[i];
+    for (let i = 0; i < form.length; i++) {
+        acc += form[i].bars;
+        if (bar < acc) return form[i];
     }
-    return SONG_FORM[0];
+    return form[0];
 }
 
 function phonkTick() {
@@ -1194,9 +1267,10 @@ function phonkTick() {
     PHONK.step++;
     if (PHONK.step % 16 === 0) {
         PHONK.bars++;
-        if (PHONK.bars > 0 && PHONK.bars % 44 === 0) {
+        const formLen = songFormBars(activeSongForm());
+        if (PHONK.bars > 0 && PHONK.bars % formLen === 0) {
             PHONK.trackIdx = (PHONK.trackIdx + 1) % 3;
-            PHONK.step = 0;
+            PHONK.step = 0; PHONK.bars = 0;
             announceTrack();
         }
     }
@@ -1750,6 +1824,23 @@ function redeemCode() {
         showToast("🎁 release: " + pet.name + " joined you!", 2600);
         const worldName = (WORLDS[world] && WORLDS[world].name) || "this world";
         setCodeStatus("Unlocked " + pet.name + " for " + worldName + ".", true);
+        refreshRewardViews();
+        saveGame(true);
+        return;
+    }
+
+    if (code === "deadmin" || code === "noadmin") {
+        game.adminMode = false;
+        delete game.redeemedCodes.admin;
+        game.points = 0;
+        game.chips = 0;
+        game.aura = 0;
+        game.totalEarned = 0;
+        if (game.casino) { game.casino.secretShards = 0; game.casino.crateKeys = 0; }
+        if (input) input.value = "";
+        sfxBuy();
+        showToast("🧹 Admin OFF · currencies reset to 0", 2800);
+        setCodeStatus("Admin mode disabled. Stink, Chips, Aura reset.", true);
         refreshRewardViews();
         saveGame(true);
         return;
@@ -2435,7 +2526,7 @@ function playHatch(pet, egg) {
     const hatchFx = buildHatchFX(overlay, r.color, tier, pet.emoji || egg.emoji);
 
     // ---- PHASE 1: suspense build-up (scales by tier) ----
-    const buildTimes = [700, 1100, 1800, 2800, 4200, 6200];
+    const buildTimes = [700, 1100, 1800, 2800, 4200, 6200, 7200, 8500];
     const buildTime = buildTimes[tier] || 700;
 
     eggEl.style.transition = "transform " + (buildTime/1000).toFixed(1) + "s cubic-bezier(0.2,0,0.8,1), filter " + (buildTime/1000).toFixed(1) + "s ease";
@@ -2556,7 +2647,10 @@ function playHatch(pet, egg) {
                 }, 150 + si * 220);
             }
             hatchDelay(() => { emojiRain(["✦","💎","🔱","👑","🌟","🚽","💥"], 120); }, 600);
-            hatchDelay(() => { bigBanner("✦ SECRET FOUND ✦", r.color); }, 200);
+            hatchDelay(() => {
+                const bannerTxt = tier >= 7 ? "☄ DIVINE!!! ☄" : (tier >= 6 ? "⚡ ULTRA!!! ⚡" : "✦ SECRET FOUND ✦");
+                bigBanner(bannerTxt, r.color);
+            }, 200);
             overlay.style.transition = "background 0.06s";
             [100, 280, 460, 640, 820, 1000].forEach((ms, i) => {
                 hatchDelay(() => {

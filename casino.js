@@ -10,12 +10,12 @@ const CASINO_REQ = { scratch: 0, mines: 2, crate: 3, loot: 4, wheel: 0 };
 
 const SCRATCH_SYMBOLS = ["💨", "🐾", "💎", "👑", "🌟", "🚽", "🔥", "⭐"];
 const CRATE_TABLE = [
-    { key: "sym-fart", label: "Trash Buff", weight: 700, tier: 0 },
-    { key: "sym-paw", label: "Rare Paw", weight: 200, tier: 1 },
-    { key: "sym-crown", label: "Epic Crown", weight: 80, tier: 2 },
-    { key: "sym-gem", label: "Legendary Gem", weight: 18, tier: 3 },
-    { key: "shard", label: "Secret Shard", weight: 1.8, tier: 4 },
-    { key: "skibidi-god", label: "SKIBIDI GOD", weight: 0.2, tier: 5 }
+    { emoji: "💩", label: "Trash Buff", weight: 700, tier: 0 },
+    { emoji: "🐾", label: "Rare Paw", weight: 200, tier: 1 },
+    { emoji: "👑", label: "Epic Crown", weight: 80, tier: 2 },
+    { emoji: "💎", label: "Legendary Gem", weight: 18, tier: 3 },
+    { emoji: "✦", label: "Secret Shard", weight: 1.8, tier: 4 },
+    { emoji: "🌈", label: "DIVINE PET", weight: 0.2, tier: 5 }
 ];
 
 function ensureCasino() {
@@ -175,7 +175,7 @@ function renderCasino() {
             '<div class="casino-hero-title">🎰 STINK CASINO</div>' +
             '<div class="casino-hero-sub">Chips only · peak world pricing · house always wins</div>' +
             '<div class="casino-stats">' +
-                '<span class="casino-stat-pill"><span class="cs-ico">🪙</span><b>' + fmt(game.chips || 0) + '</b></span>' +
+                '<span class="casino-stat-pill">' + chipIcon() + '<b>' + fmt(game.chips || 0) + '</b></span>' +
                 '<span class="casino-stat-pill"><span class="cs-ico">💎</span><b>' + c.secretShards + '</b> shards</span>' +
                 '<span class="casino-stat-pill"><span class="cs-ico">🎲</span><b>' + c.dailyGambles + '/' + DAILY_GAMBLE_CAP + '</b></span>' +
                 (c.crateKeys > 0 ? '<span class="casino-stat-pill"><span class="cs-ico">🔑</span><b>' + c.crateKeys + '</b></span>' : '') +
@@ -183,10 +183,10 @@ function renderCasino() {
             '</div>' +
         '</div>' +
         '<div class="casino-grid">' +
-            casinoCard("scratch", "🎫 Dank Scratch", "Scratch foil grid · match top row", chipPrice("scratch") + " 🪙", "buyScratch()", !casinoUnlocked("scratch")) +
-            casinoCard("mines", "💣 Stink Mines", "5×5 · cash out or boom", chipPrice("mines") + " 🪙", "startMines()", !casinoUnlocked("mines") || c.minesActive) +
-            casinoCard("crate", "📦 Brainrot Crate", "CSGO-style roller · win pets", (c.crateKeys > 0 ? "🔑 1 Key" : chipPrice("crate") + " 🪙"), "openCrate()", !casinoUnlocked("crate")) +
-            casinoCard("loot", "🚽 Ohio Case", "Cursed · 0.001% Skibidi God", chipPrice("loot") + " 🪙", "openOhioCase()", !casinoUnlocked("loot")) +
+            casinoCard("scratch", "🎫 Dank Scratch", "Scratch foil grid · match top row", chipPrice("scratch") + " " + chipIcon(), "buyScratch()", !casinoUnlocked("scratch")) +
+            casinoCard("mines", "💣 Stink Mines", "5×5 · cash out or boom", chipPrice("mines") + " " + chipIcon(), "startMines()", !casinoUnlocked("mines") || c.minesActive) +
+            casinoCard("crate", "📦 Brainrot Crate", "CSGO-style roller · win pets", (c.crateKeys > 0 ? "1 🔑" : chipPrice("crate") + " " + chipIcon()), "openCrate()", !casinoUnlocked("crate")) +
+            casinoCard("loot", "🚽 Ohio Case", "Cursed · win DIVINE pet", chipPrice("loot") + " " + chipIcon(), "openOhioCase()", !casinoUnlocked("loot")) +
             casinoCard("wheel", "🎡 Lucky Wheel", wheelReady() ? "FREE SPIN READY!" : ("Next: " + wheelCountdown()), "FREE", "spinWheel()", !wheelReady()) +
             casinoCard("ad", "📺 Ad Spin", adWheelReady() ? "Watch ad · bonus spin" : "Cooldown", "FREE", "offerAdWheel()", !adWheelReady()) +
         '</div>' +
@@ -196,6 +196,8 @@ function renderCasino() {
         '<p class="casino-disclaimer">⚠️ Chips are scarce. Near-misses intentional. Gambling taxes Aura rebirth.</p>';
 }
 
+function chipIcon() { return '<span class="chip-coin" aria-label="chips">C</span>'; }
+
 function casinoCard(id, title, desc, cost, onclick, disabled) {
     return '<button class="casino-card ' + id + (disabled ? " disabled" : "") + '" onclick="' + onclick + '"' + (disabled ? ' disabled' : '') + '>' +
         '<div class="casino-card-title">' + title + '</div>' +
@@ -203,7 +205,15 @@ function casinoCard(id, title, desc, cost, onclick, disabled) {
         '<div class="casino-card-cost">' + cost + '</div></button>';
 }
 
+let casinoSession = 0;
+// run fn only if this casino session is still the active one (prevents stale timers
+// from a previous game closing/altering a newly opened game)
+function casinoDefer(sess, fn, ms) {
+    setTimeout(() => { if (sess === casinoSession) fn(); }, ms);
+}
+
 function openCasinoModal(title, inner) {
+    casinoSession++; // invalidate any pending timers from a prior game
     let m = document.getElementById("casino-modal");
     if (!m) {
         m = document.createElement("div");
@@ -215,9 +225,11 @@ function openCasinoModal(title, inner) {
     document.getElementById("casino-modal-title").textContent = title;
     document.getElementById("casino-modal-body").innerHTML = inner;
     m.classList.remove("hidden");
+    return casinoSession;
 }
 
 function closeCasinoModal() {
+    casinoSession++; // invalidate pending timers
     const m = document.getElementById("casino-modal");
     if (m) m.classList.add("hidden");
     if (window._scratchCleanup) { window._scratchCleanup(); window._scratchCleanup = null; }
@@ -271,7 +283,7 @@ function startScratchCanvas(betChips) {
     window._scratchBet = betChips;
     window._scratchDone = false;
     window._scratchCols = cols;
-    setTimeout(initScratchCanvas, 40);
+    requestAnimationFrame(initScratchCanvas);
 }
 
 function initScratchCanvas() {
@@ -306,34 +318,50 @@ function initScratchCanvas() {
     drawFoil();
 
     let scratching = false;
-    let totalErased = 0;
-    const totalPixels = canvas.width * canvas.height;
+    let lastSampleAt = 0;
 
     function getPos(e) {
         const rect = canvas.getBoundingClientRect();
         const scaleX = canvas.width / rect.width;
         const scaleY = canvas.height / rect.height;
-        const src = e.touches ? e.touches[0] : e;
+        const src = (e.touches && e.touches[0]) ? e.touches[0] : e;
         return { x: (src.clientX - rect.left) * scaleX, y: (src.clientY - rect.top) * scaleY };
+    }
+
+    function scratchedFraction() {
+        try {
+            const img = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
+            let clear = 0;
+            // sample every 16th pixel for speed
+            const step = 16 * 4;
+            let count = 0;
+            for (let i = 3; i < img.length; i += step) {
+                count++;
+                if (img[i] < 40) clear++;
+            }
+            return count ? clear / count : 0;
+        } catch (e) { return 0; }
     }
 
     function scratchAt(px, py) {
         ctx.globalCompositeOperation = "destination-out";
         ctx.beginPath();
-        ctx.arc(px, py, 22, 0, Math.PI * 2);
+        ctx.arc(px, py, 20, 0, Math.PI * 2);
         ctx.fill();
         ctx.globalCompositeOperation = "source-over";
-        sfxClick();
-        // auto-finish when ~55% scratched
-        totalErased += Math.PI * 22 * 22;
-        if (totalErased > totalPixels * 0.55 && !window._scratchDone) {
-            autoRevealScratch();
+        const now = Date.now();
+        if (now - lastSampleAt > 90) {
+            lastSampleAt = now;
+            sfxClick();
+            if (!window._scratchDone && scratchedFraction() >= 0.8) {
+                autoRevealScratch();
+            }
         }
     }
 
     function onStart(e) { e.preventDefault(); scratching = true; const p = getPos(e); scratchAt(p.x, p.y); }
     function onMove(e) { e.preventDefault(); if (scratching) { const p = getPos(e); scratchAt(p.x, p.y); } }
-    function onEnd() { scratching = false; }
+    function onEnd() { scratching = false; if (!window._scratchDone && scratchedFraction() >= 0.8) autoRevealScratch(); }
 
     canvas.addEventListener("pointerdown", onStart);
     canvas.addEventListener("pointermove", onMove);
@@ -359,6 +387,7 @@ function autoRevealScratch() {
     const win = top[0] === top[1] && top[1] === top[2] && top[2] === top[3];
     const near = !win && (top[0] === top[1] && top[1] === top[2]);
     const hint = document.getElementById("scratch-hint");
+    const sess = casinoSession;
     if (win) {
         resolveScratchJackpot(hint);
     } else if (near) {
@@ -366,12 +395,12 @@ function autoRevealScratch() {
         showToast("Near miss! The foil knew.", 2800);
         screenFlash("#ff3d9a");
         saveGame(); updateDisplay();
-        setTimeout(closeCasinoModal, 2400);
+        casinoDefer(sess, closeCasinoModal, 2400);
     } else {
         if (hint) hint.textContent = "No match. L + ratio.";
         grantChips(Math.max(1, Math.floor((window._scratchBet || 1) * 0.15)), "consolation");
         saveGame(); updateDisplay();
-        setTimeout(closeCasinoModal, 2400);
+        casinoDefer(sess, closeCasinoModal, 2400);
     }
 }
 
@@ -398,6 +427,8 @@ function resolveScratchJackpot(hint) {
     if (hint) hint.textContent = "✨ JACKPOT! " + msg;
     showToast("🎉 JACKPOT! " + msg, 3200);
     sfxRare(4); shake();
+    saveGame(); updateDisplay();
+    casinoDefer(casinoSession, closeCasinoModal, 2800);
 }
 
 /* ---- MINES ---- */
@@ -434,7 +465,7 @@ function renderMinesBoard() {
         let cls = "mine-tile";
         if (rev) {
             cls += isMine ? " boom" : " safe";
-            inner = isMine ? premiumHTML("mine-bomb", "mine-tile-ico", "Bomb") : premiumHTML("mine-safe", "mine-tile-ico", "Safe");
+            inner = isMine ? "💣" : "💎";
         }
         html += '<button class="' + cls + '" onclick="pickMine(' + i + ')"' + (rev ? ' disabled' : '') + '>' + inner + '</button>';
     }
@@ -455,7 +486,7 @@ function pickMine(i) {
         screenFlash("#ff2020");
         if (Math.random() < 0.4) showToast("👻 You would have had x" + (st.mult * 1.6).toFixed(1) + " if you stopped...", 3200);
         saveGame(); renderMinesBoard();
-        setTimeout(closeCasinoModal, 2800);
+        casinoDefer(casinoSession, closeCasinoModal, 2800);
         return;
     }
     st.mult *= 1.12 + Math.random() * 0.35;
@@ -476,7 +507,7 @@ function cashOutMines() {
     st.alive = false;
     showToast("💰 Cashed x" + st.mult.toFixed(2) + " → " + payout + " chips!", 2800);
     saveGame(); updateDisplay(); renderCasino();
-    setTimeout(closeCasinoModal, 2200);
+    casinoDefer(casinoSession, closeCasinoModal, 2200);
 }
 
 /* ---- CSGO CRATE ROLLER ---- */
@@ -495,25 +526,33 @@ function openCrate() {
     const won = rollCrateItem(false);
     const near = won.tier < 5 && Math.random() < 0.34;
     const strip = buildCrateStrip(won, near);
-    const html = '<div class="crate-stage">' + premiumHTML("crate", "crate-stage-ico", "Crate") + '</div>' +
+    const html = '<div class="crate-stage">📦</div>' +
         '<div class="crate-viewport"><div class="crate-marker"></div><div class="crate-strip" id="crate-strip"></div></div>' +
         '<p class="crate-status" id="crate-status">Opening...</p>';
     openCasinoModal("📦 Brainrot Crate", html);
     const stripEl = document.getElementById("crate-strip");
     stripEl.innerHTML = strip.map(it =>
-        '<div class="crate-item tier-' + it.tier + '">' + premiumHTML(it.key, "crate-item-ico", it.label) + '<span>' + it.label + '</span></div>'
+        '<div class="crate-item tier-' + it.tier + '"><span class="crate-item-emoji">' + it.emoji + '</span><span class="crate-item-label">' + it.label + '</span></div>'
     ).join("");
-    const itemW = 88;
-    const winIdx = 28;
-    const offset = -(winIdx * itemW - 140);
-    stripEl.style.transition = "none";
-    stripEl.style.transform = "translateX(0)";
-    requestAnimationFrame(() => {
-        stripEl.style.transition = "transform 5.5s cubic-bezier(0.12,0.7,0.1,1)";
-        stripEl.style.transform = "translateX(" + offset + "px)";
-    });
+    animateCrateStrip(stripEl, 28, 5.5);
     sfxWhoosh();
-    setTimeout(() => resolveCrateWin(won), 5600);
+    casinoDefer(casinoSession, () => resolveCrateWin(won), 5600);
+}
+
+function animateCrateStrip(stripEl, winIdx, durationSec) {
+    const itemW = 88; // 84px + 4px gap
+    const viewport = stripEl.parentElement;
+    const vpW = viewport ? viewport.offsetWidth : 320;
+    // center of winning item should align with viewport center, + tiny random jitter
+    const jitter = (Math.random() * 40 - 20);
+    const offset = vpW / 2 - (winIdx * itemW + itemW / 2) + jitter;
+    stripEl.style.transition = "none";
+    stripEl.style.transform = "translateX(0px)";
+    void stripEl.offsetWidth; // force reflow
+    requestAnimationFrame(() => {
+        stripEl.style.transition = "transform " + durationSec + "s cubic-bezier(0.12,0.7,0.1,1)";
+        stripEl.style.transform = "translateX(" + offset.toFixed(1) + "px)";
+    });
 }
 
 function rollCrateItem(forceGod) {
@@ -535,15 +574,28 @@ function buildCrateStrip(won, nearMiss) {
     return strip;
 }
 
+function grantCasinoApexPet(wantDivine) {
+    const tmpl = worldApexTemplate(game.worldIdx, wantDivine);
+    const pet = {
+        id: Date.now() + Math.floor(Math.random() * 99999),
+        name: tmpl.name,
+        emoji: tmpl.emoji,
+        rarity: tmpl.rarity,
+        star: 0,
+        power: petPower(tmpl.base, game.worldIdx) * 1.1
+    };
+    game.pets.push(pet);
+    game.discovered[dexKey(game.worldIdx, pet.name)] = true;
+    return pet;
+}
+
 function resolveCrateWin(won) {
     const status = document.getElementById("crate-status");
     const c = ensureCasino();
     if (won.tier >= 5) {
-        const pet = { id: Date.now(), name: "Skibidi God", emoji: "🚽", rarity: "secret", star: 0, power: petPower(200, game.worldIdx) };
-        game.pets.push(pet);
-        game.discovered[dexKey(game.worldIdx, "Skibidi God")] = true;
-        if (status) status.innerHTML = "✦ SKIBIDI GOD!!!";
-        rainbowFlash(); shake(); bigBanner("GOD ROLL", "#00ffd0"); sfxRare(5);
+        const pet = grantCasinoApexPet(true);
+        if (status) status.innerHTML = "🌈 " + pet.name + "!!!";
+        rainbowFlash(); shake(); bigBanner("DIVINE ROLL", "#ffffff"); sfxRare(5);
     } else if (won.tier >= 4) {
         c.secretShards += 2;
         if (status) status.textContent = "💎 2 Secret Shards!";
@@ -567,7 +619,7 @@ function resolveCrateWin(won) {
     }
     showToast("📦 " + won.label + "!", 2800);
     saveGame(); updateDisplay(); renderCasino();
-    setTimeout(closeCasinoModal, 3000);
+    casinoDefer(casinoSession, closeCasinoModal, 3000);
 }
 
 /* ---- OHIO CASE (cursed loot box + roller) ---- */
@@ -595,43 +647,73 @@ function openCrateVisualOhio(forceGod, nearMiss, cost) {
     openCasinoModal("📦 Only In Ohio Case", html);
     const stripEl = document.getElementById("crate-strip");
     stripEl.innerHTML = strip.map(it =>
-        '<div class="crate-item tier-' + it.tier + '">' + premiumHTML(it.key, "crate-item-ico", it.label) + '</div>'
+        '<div class="crate-item tier-' + it.tier + '"><span class="crate-item-emoji">' + it.emoji + '</span></div>'
     ).join("");
-    const offset = -(28 * 88 - 140);
-    requestAnimationFrame(() => {
-        stripEl.style.transition = "transform 6s cubic-bezier(0.08,0.82,0.12,1)";
-        stripEl.style.transform = "translateX(" + offset + "px)";
-    });
-    setTimeout(() => {
+    animateCrateStrip(stripEl, 28, 6);
+    const sess = casinoSession;
+    casinoDefer(sess, () => {
         const status = document.getElementById("loot-status");
         if (forceGod) {
             resolveCrateWin(CRATE_TABLE[5]);
-            if (status) status.textContent = "🚽🚽🚽 SKIBIDI GOD — ONLY IN OHIO";
+            if (status) status.textContent = "🚽🚽🚽 DIVINE GOD — ONLY IN OHIO";
         } else if (nearMiss) {
             grantChips(Math.max(1, Math.floor(cost * 0.06)));
             if (status) status.textContent = "🚽🚽 ...💩 MISSED GOD BY ONE";
             showToast("😱 SO CLOSE!!! Pain.", 3200);
             screenFlash("#ff3d9a");
+            saveGame(); updateDisplay(); renderCasino();
+            casinoDefer(sess, closeCasinoModal, 3200);
         } else {
             resolveCrateWin(won);
             if (status) status.textContent = won.label;
         }
-        saveGame(); updateDisplay(); renderCasino();
-        setTimeout(closeCasinoModal, 3200);
     }, 6100);
 }
 
-/* ---- WHEEL ---- */
+/* ---- WHEEL (real spinning wheel with visible segments + odds) ---- */
 const WHEEL_SEGMENTS = [
-    { label: "2 Chips", weight: 24, fn: () => grantChips(2) },
-    { label: "5 Chips", weight: 18, fn: () => grantChips(5) },
-    { label: "Golden Fart x2", weight: 14, fn: () => { const c = ensureCasino(); c.goldenBuffMult = 2; c.goldenBuffUntil = Date.now() + 4 * 60 * 1000; } },
-    { label: "Egg -12%", weight: 12, fn: () => { const c = ensureCasino(); c.eggDiscountPct = 0.12; c.eggDiscountUntil = Date.now() + 8 * 60 * 1000; } },
-    { label: "12 Chips", weight: 10, fn: () => grantChips(12) },
-    { label: "1 Shard", weight: 6, fn: () => { ensureCasino().secretShards++; } },
-    { label: "Crate Key", weight: 4, fn: () => { ensureCasino().crateKeys++; } },
-    { label: "SECRET PET", weight: 0.08, fn: () => grantWheelSecretPet() }
+    { label: "2 Chips",   short: "2C",   weight: 24,   color: "#3da5ff", fn: () => grantChips(2) },
+    { label: "5 Chips",   short: "5C",   weight: 18,   color: "#5dd2ff", fn: () => grantChips(5) },
+    { label: "Golden x2", short: "GOLD", weight: 14,   color: "#ffd54a", fn: () => { const c = ensureCasino(); c.goldenBuffMult = 2; c.goldenBuffUntil = Date.now() + 4 * 60 * 1000; } },
+    { label: "Egg -12%",  short: "-12%", weight: 12,   color: "#7fff00", fn: () => { const c = ensureCasino(); c.eggDiscountPct = 0.12; c.eggDiscountUntil = Date.now() + 8 * 60 * 1000; } },
+    { label: "12 Chips",  short: "12C",  weight: 10,   color: "#b14eff", fn: () => grantChips(12) },
+    { label: "1 Shard",   short: "💎",   weight: 6,    color: "#ff3d9a", fn: () => { ensureCasino().secretShards++; } },
+    { label: "Crate Key", short: "🔑",   weight: 4,    color: "#ff8a3d", fn: () => { ensureCasino().crateKeys++; } },
+    { label: "ULTRA PET", short: "✦",    weight: 0.08, color: "#00ffd0", fn: () => grantWheelSecretPet() }
 ];
+
+function wheelOddsPct(seg, total) {
+    const pct = (seg.weight / total) * 100;
+    return pct < 0.1 ? pct.toFixed(2) : (pct < 1 ? pct.toFixed(1) : Math.round(pct));
+}
+
+function buildWheelSVG(totalW) {
+    const cx = 130, cy = 130, r = 125;
+    let angle = -90; // start at top
+    let paths = "";
+    let labels = "";
+    WHEEL_SEGMENTS.forEach((seg) => {
+        const sweep = (seg.weight / totalW) * 360;
+        const a0 = angle * Math.PI / 180;
+        const a1 = (angle + sweep) * Math.PI / 180;
+        const x0 = cx + r * Math.cos(a0), y0 = cy + r * Math.sin(a0);
+        const x1 = cx + r * Math.cos(a1), y1 = cy + r * Math.sin(a1);
+        const large = sweep > 180 ? 1 : 0;
+        paths += '<path d="M' + cx + ',' + cy + ' L' + x0.toFixed(1) + ',' + y0.toFixed(1) +
+            ' A' + r + ',' + r + ' 0 ' + large + ',1 ' + x1.toFixed(1) + ',' + y1.toFixed(1) + ' Z" fill="' + seg.color + '" stroke="#0a0418" stroke-width="2"/>';
+        // label at mid-angle (only if slice big enough)
+        const mid = (angle + sweep / 2) * Math.PI / 180;
+        const lr = r * 0.66;
+        const lx = cx + lr * Math.cos(mid), ly = cy + lr * Math.sin(mid);
+        const deg = (angle + sweep / 2);
+        if (sweep > 8) {
+            labels += '<text x="' + lx.toFixed(1) + '" y="' + ly.toFixed(1) + '" fill="#0a0418" font-size="13" font-weight="700" text-anchor="middle" dominant-baseline="middle" transform="rotate(' + deg.toFixed(1) + ' ' + lx.toFixed(1) + ' ' + ly.toFixed(1) + ')">' + seg.short + '</text>';
+        }
+        angle += sweep;
+    });
+    return '<svg viewBox="0 0 260 260" id="wheel-svg" class="wheel-svg">' + paths + labels +
+        '<circle cx="130" cy="130" r="22" fill="#1a0a38" stroke="#ffd54a" stroke-width="3"/></svg>';
+}
 
 function spinWheel(fromAd) {
     if (!fromAd && !wheelReady()) { sfxError(); showToast("⏳ " + wheelCountdown(), 2000); return; }
@@ -643,25 +725,53 @@ function spinWheel(fromAd) {
     }
     c.wheelSpins++;
     const totalW = WHEEL_SEGMENTS.reduce((s, x) => s + x.weight, 0);
+
+    // pick winner + compute its mid-angle so the pointer lands on it
     let roll = Math.random() * totalW;
-    let picked = WHEEL_SEGMENTS[0];
-    for (const seg of WHEEL_SEGMENTS) {
-        roll -= seg.weight;
-        if (roll <= 0) { picked = seg; break; }
+    let pickedIdx = 0, acc = 0, segStart = 0;
+    for (let i = 0; i < WHEEL_SEGMENTS.length; i++) {
+        if (roll < acc + WHEEL_SEGMENTS[i].weight) { pickedIdx = i; segStart = acc; break; }
+        acc += WHEEL_SEGMENTS[i].weight;
     }
-    const html = '<div class="wheel-wrap"><div class="wheel-spinner-emoji" id="wheel-spinner">🎡</div></div><p id="wheel-result" class="wheel-result">Spinning...</p>';
+    const picked = WHEEL_SEGMENTS[pickedIdx];
+    const sweep = (picked.weight / totalW) * 360;
+    const segMid = ((segStart + picked.weight / 2) / totalW) * 360; // degrees from top
+    // pointer is fixed at top; we rotate wheel so segMid lands under pointer
+    const spins = 5;
+    const targetRot = spins * 360 - segMid + (Math.random() * sweep - sweep / 2) * 0.6;
+
+    const oddsList = WHEEL_SEGMENTS.map(s =>
+        '<span class="wheel-odd"><span class="wheel-odd-dot" style="background:' + s.color + '"></span>' + s.label + ' <b>' + wheelOddsPct(s, totalW) + '%</b></span>'
+    ).join("");
+
+    const html = '<div class="wheel-stage">' +
+        '<div class="wheel-pointer">▼</div>' +
+        '<div class="wheel-rotor" id="wheel-rotor">' + buildWheelSVG(totalW) + '</div>' +
+        '</div>' +
+        '<div class="wheel-odds-list">' + oddsList + '</div>' +
+        '<p id="wheel-result" class="wheel-result">Spinning...</p>';
     openCasinoModal("🎡 Lucky Wheel", html);
     sfxWhoosh();
-    setTimeout(() => {
+    const rotor = document.getElementById("wheel-rotor");
+    if (rotor) {
+        rotor.style.transition = "none";
+        rotor.style.transform = "rotate(0deg)";
+        requestAnimationFrame(() => {
+            rotor.style.transition = "transform 4.5s cubic-bezier(0.15,0.85,0.12,1)";
+            rotor.style.transform = "rotate(" + targetRot.toFixed(1) + "deg)";
+        });
+    }
+    const sess = casinoSession;
+    casinoDefer(sess, () => {
         picked.fn();
         const res = document.getElementById("wheel-result");
-        if (res) res.textContent = "🎉 " + picked.label + "!";
-        if (picked.weight <= 0.2) { rainbowFlash(); shake(); bigBanner("SECRET!!!", "#00ffd0"); sfxRare(5); }
-        else { screenFlash("#ffd54a"); sfxBuy(); }
+        if (res) res.innerHTML = "🎉 <b style='color:" + picked.color + "'>" + picked.label + "</b>!";
+        if (picked.weight <= 0.2) { rainbowFlash(); shake(); bigBanner("ULTRA PET!!!", "#00ffd0"); sfxRare(5); }
+        else { screenFlash(picked.color); sfxBuy(); }
         showToast("🎡 " + picked.label, 2800);
         saveGame(); updateDisplay(); renderCasino();
-        setTimeout(closeCasinoModal, 2800);
-    }, 3200);
+        casinoDefer(sess, closeCasinoModal, 3000);
+    }, 4700);
 }
 
 function offerAdWheel() {
@@ -673,17 +783,8 @@ function offerAdWheel() {
 }
 
 function grantWheelSecretPet() {
-    const pets = allPetsForWorld(game.worldIdx).filter(p => RARITY[p.rarity].tier >= 5);
-    const template = pets.length ? pets[Math.floor(Math.random() * pets.length)] : { name: "Wheel God", emoji: "🚽", rarity: "secret", base: 150 };
-    game.pets.push({
-        id: Date.now() + Math.floor(Math.random() * 99999),
-        name: template.name,
-        emoji: template.emoji || "✦",
-        rarity: "secret",
-        star: 0,
-        power: petPower(template.base || 120, game.worldIdx) * 1.15
-    });
-    game.discovered[dexKey(game.worldIdx, template.name)] = true;
+    // wheel grants the world's ultra (rarer than secret, below divine)
+    grantCasinoApexPet(false);
 }
 
 function redeemSecretShards() {
