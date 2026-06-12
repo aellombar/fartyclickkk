@@ -11,6 +11,24 @@
     <link rel="stylesheet" href="style_extra.css">
 </head>
 <body>
+    <!-- First-launch platform picker -->
+    <div id="platform-modal" class="modal hidden">
+        <div class="modal-content platform-modal-content">
+            <h2>Where are you playing?</h2>
+            <p class="platform-sub">We'll tune graphics for your device. You can change this anytime in Settings.</p>
+            <button class="platform-pick" onclick="choosePlatform('mobile')">
+                <span class="platform-ico">📱</span>
+                <span class="platform-name">Mobile</span>
+                <span class="platform-desc">Performance mode ON · smoother play</span>
+            </button>
+            <button class="platform-pick" onclick="choosePlatform('desktop')">
+                <span class="platform-ico">💻</span>
+                <span class="platform-name">PC / High-end phone</span>
+                <span class="platform-desc">Full effects · max eye candy</span>
+            </button>
+        </div>
+    </div>
+
     <div id="animated-bg"></div>
     <div id="particle-overlay"></div>
     <div id="screen-flash"></div>
@@ -56,7 +74,7 @@
             </button>
         </div>
 
-        <button onclick="rebirth()" id="rebirth-btn" class="rebirth-btn">🔄 REBIRTH<span id="rebirth-cost" class="rb-cost">1M 💨</span></button>
+        <button onclick="rebirth()" id="rebirth-btn" class="rebirth-btn">🔄 REBIRTH<span id="asc-badge" class="asc-badge hidden"></span><span id="rebirth-cost" class="rb-cost">1M 💨</span></button>
     </div>
 
     <nav class="bottom-nav">
@@ -162,7 +180,16 @@
                 <label class="set-row"><span>🔊 SFX Volume</span><span id="sfx-vol-val" class="set-val">70%</span></label>
                 <input type="range" id="sfx-vol" min="0" max="100" value="70" class="slider" oninput="setSfxVol(this.value)">
             </div>
+            <div class="set-group">
+                <label class="set-row"><span>🖥️ Platform</span><span id="platform-label" class="set-val">Not set</span></label>
+                <button class="set-action" onclick="repickPlatform()">Change platform</button>
+            </div>
+            <div class="set-group">
+                <label class="set-row"><span>🎨 Graphics</span><span class="set-val">Performance</span></label>
+            </div>
             <div class="set-group toggles">
+                <button class="toggle-row" id="tg-perf" onclick="toggleSetting('performanceMode', this)"><span>⚡ Performance mode</span><span class="toggle-pill">OFF</span></button>
+                <button class="toggle-row" id="tg-reduce-ui" onclick="toggleSetting('reduceUiAnim', this)"><span>🎞️ Reduce UI animations</span><span class="toggle-pill">OFF</span></button>
                 <button class="toggle-row" id="tg-music" onclick="toggleSetting('musicOn', this)"><span>🎶 Music</span><span class="toggle-pill">ON</span></button>
                 <button class="toggle-row" id="tg-particles" onclick="toggleSetting('particles', this)"><span>✨ Particles</span><span class="toggle-pill">ON</span></button>
                 <button class="toggle-row" id="tg-shake" onclick="toggleSetting('screenShake', this)"><span>📳 Screen Shake</span><span class="toggle-pill">ON</span></button>
@@ -178,18 +205,7 @@
             </div>
             <div class="set-group">
                 <label class="set-row"><span>💾 Save Slots</span><span class="set-val">3 slots</span></label>
-                <div class="slot-row">
-                    <button class="set-action slot-btn" onclick="saveSlotExport(1)">Save 1</button>
-                    <button class="set-action slot-btn" onclick="saveSlotLoad(1)">Load 1</button>
-                </div>
-                <div class="slot-row">
-                    <button class="set-action slot-btn" onclick="saveSlotExport(2)">Save 2</button>
-                    <button class="set-action slot-btn" onclick="saveSlotLoad(2)">Load 2</button>
-                </div>
-                <div class="slot-row">
-                    <button class="set-action slot-btn" onclick="saveSlotExport(3)">Save 3</button>
-                    <button class="set-action slot-btn" onclick="saveSlotLoad(3)">Load 3</button>
-                </div>
+                <div id="save-slots-wrap" class="save-slots-wrap"></div>
             </div>
             <div class="set-group">
                 <button class="set-action" onclick="exportSave()">📤 Export Save</button>
@@ -240,6 +256,7 @@
             <h2>Welcome Back!</h2>
             <p class="offline-text">While you were gone your farts earned:</p>
             <div id="offline-amount" class="offline-amount">0 💨</div>
+            <p id="offline-factory" class="offline-factory"></p>
             <button class="modal-btn" onclick="claimOffline()">Collect 🤑</button>
         </div>
     </div>

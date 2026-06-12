@@ -30,7 +30,9 @@ function freshGameState() {
         lastSeen: Date.now(),
         settings: {
             musicVol: 0.35, sfxVol: 0.70,
-            musicOn: true, particles: true, screenShake: true, brainrot: true
+            musicOn: true, particles: true, screenShake: true, brainrot: true,
+            platform: null, platformChosen: false,
+            performanceMode: false, reduceUiAnim: false
         }
     };
 }
@@ -46,8 +48,9 @@ let buyMode = 1; // 1, 10, 100, or "max"
 
 const domCache = Object.create(null);
 const textCache = Object.create(null);
-const FX_NODE_LIMIT = 72;
-const FX_SOFT_LIMIT = 48;
+const fxLimits = { node: 72, soft: 48 };
+function fxNodeLimit() { return fxLimits.node; }
+function fxSoftLimit() { return fxLimits.soft; }
 let fxNodeCount = 0;
 let displayPending = false;
 let comboRaf = null;
@@ -64,10 +67,11 @@ function byId(id) {
     return node;
 }
 
-function fxBudget() { return Math.max(0, FX_NODE_LIMIT - fxNodeCount); }
+function fxBudget() { return Math.max(0, fxNodeLimit() - fxNodeCount); }
 function fxScale() {
-    if (fxNodeCount >= FX_SOFT_LIMIT) return 0.3;
-    if (fxNodeCount >= FX_SOFT_LIMIT * 0.65) return 0.55;
+    const soft = fxSoftLimit();
+    if (fxNodeCount >= soft) return 0.3;
+    if (fxNodeCount >= soft * 0.65) return 0.55;
     return 1;
 }
 
@@ -90,7 +94,7 @@ function maybeRefreshUpgradeTabs(force) {
 
 function appendFxNode(parent, node, ttl, important) {
     if (!parent || !node) return false;
-    if (!important && fxNodeCount >= FX_NODE_LIMIT) return false;
+    if (!important && fxNodeCount >= fxNodeLimit()) return false;
     fxNodeCount++;
     parent.appendChild(node);
     setTimeout(() => {
@@ -1412,6 +1416,7 @@ function getPassive() {
     p *= (typeof casinoPassiveMult === "function" ? casinoPassiveMult() : 1);
     let mult = rebirthBonus() * auraMult("passive") * dexBonus();
     if (typeof jobBonuses === "function") mult *= 1 + (jobBonuses().passive || 0);
+    if (typeof metaBonus === "function") mult *= 1 + metaBonus("passive");
     if (typeof ascensionMutatorMult === "function") mult *= ascensionMutatorMult("passive") * ascensionMutatorMult("all");
     return p * mult;
 }
@@ -1459,10 +1464,20 @@ function auraUpCost(i) {
     const lvl = game.auraUpgrades[i] || 0;
     return Math.floor(u.base * Math.pow(2.1, lvl) * (lvl >= 15 ? 3 : 1));
 }
+function chipGainMult() {
+    let m = 1;
+    if (typeof ascensionMutatorMult === "function") m *= ascensionMutatorMult("chips") || 1;
+    if (typeof jobBonuses === "function") m *= 1 + (jobBonuses().chips || 0);
+    (game.equippedPets || []).forEach(p => {
+        if (p.trait === "casino") m *= 1.15;
+    });
+    return m;
+}
 function grantChips(n, reason) {
     if (!n || n <= 0) return;
-    game.chips = (game.chips || 0) + n;
-    if (reason) showToast("🪙 +" + n + " Chips · " + reason, 2200);
+    const gain = Math.max(1, Math.floor(n * chipGainMult()));
+    game.chips = (game.chips || 0) + gain;
+    if (reason) showToast("🪙 +" + gain + " Chips · " + reason, 2200);
 }
 function initUpgrades() {
     if (!game.upgrades) game.upgrades = {};
@@ -1476,7 +1491,7 @@ function initUpgrades() {
 //  SAVE / LOAD (+ offline earnings)
 // ============================================================
 const SAVE_KEY = "fartSave_v9";
-let offlinePending = 0;
+let offlinePending = 0, offlineFactoryPending = 0;
 
 function clearAllSaveData() {
     try {
@@ -1514,6 +1529,11 @@ function sanitizeGameState() {
     });
     initUpgrades();
     if (typeof ensureMeta === "function") ensureMeta();
+    if (!game.settings.platformChosen) {
+        if (!game.settings.platform) game.settings.platform = null;
+        if (typeof game.settings.performanceMode !== "boolean") game.settings.performanceMode = false;
+        if (typeof game.settings.reduceUiAnim !== "boolean") game.settings.reduceUiAnim = false;
+    }
 }
 
 let saveTimer = null;
@@ -1557,16 +1577,23 @@ function loadGame() {
 function computeOffline() {
     const now = Date.now();
     const elapsed = Math.min((now - (game.lastSeen || now)) / 1000, 8 * 3600);
-    const rate = getPassive() * getPetMult();
+    const mult = getPetMult();
+    const rate = getPassive() * mult;
+    const factoryRate = (typeof buildingProduction === "function" ? buildingProduction() : 0) * mult;
     offlinePending = Math.floor(rate * elapsed * 0.5);
+    offlineFactoryPending = Math.floor(factoryRate * elapsed * 0.5);
     if (offlinePending > 10 && elapsed > 30) {
         const amt = document.getElementById("offline-amount");
         if (amt) amt.innerText = fmt(offlinePending) + " 💨";
+        const fac = document.getElementById("offline-factory");
+        if (fac) fac.textContent = offlineFactoryPending > 0
+            ? "🏭 Factories earned ~" + fmt(offlineFactoryPending) + " 💨 (50% offline rate)"
+            : "";
         const m = document.getElementById("offline-modal"); if (m) m.classList.remove("hidden");
-    } else offlinePending = 0;
+    } else { offlinePending = 0; offlineFactoryPending = 0; }
 }
 function claimOffline() {
-    game.points += offlinePending; offlinePending = 0;
+    game.points += offlinePending; offlinePending = 0; offlineFactoryPending = 0;
     const m = document.getElementById("offline-modal"); if (m) m.classList.add("hidden");
     sfxBuy(); burstAt(window.innerWidth/2, window.innerHeight/2, "#7FFF00", 24); updateDisplay(); saveGame();
 }
@@ -1784,6 +1811,53 @@ function showUpTab(name, btn) {
 
 
 // ============================================================
+//  PLATFORM + PERFORMANCE
+// ============================================================
+function isPerformanceMode() {
+    return !!(game.settings && game.settings.performanceMode);
+}
+
+function applyPerformanceProfile() {
+    const perf = isPerformanceMode();
+    const root = document.documentElement;
+    root.classList.toggle("perf-mode", perf);
+    root.classList.toggle("perf-desktop", !perf);
+    fxLimits.node = perf ? 22 : 72;
+    fxLimits.soft = perf ? 14 : 48;
+    document.querySelectorAll(".corner-glow").forEach(el => { el.style.display = perf ? "none" : ""; });
+    const orbit = document.querySelector(".btn-orbit");
+    if (orbit) orbit.style.display = perf ? "none" : "";
+    const po = document.getElementById("particle-overlay");
+    if (po) po.style.display = game.settings.particles ? "block" : "none";
+    if (perf && game.settings.reduceUiAnim) root.classList.add("reduce-ui-anim");
+    else root.classList.remove("reduce-ui-anim");
+}
+
+function choosePlatform(platform) {
+    game.settings.platform = platform === "mobile" ? "mobile" : "desktop";
+    game.settings.platformChosen = true;
+    game.settings.performanceMode = game.settings.platform === "mobile";
+    game.settings.reduceUiAnim = game.settings.platform === "mobile";
+    if (game.settings.platform === "mobile") game.settings.particles = false;
+    applyPerformanceProfile();
+    saveGame(true);
+    const modal = document.getElementById("platform-modal");
+    if (modal) modal.classList.add("hidden");
+    syncSettingsUI();
+}
+
+function maybeShowPlatformPicker() {
+    if (game.settings.platformChosen) return;
+    const modal = document.getElementById("platform-modal");
+    if (modal) modal.classList.remove("hidden");
+}
+
+function repickPlatform() {
+    game.settings.platformChosen = false;
+    maybeShowPlatformPicker();
+}
+
+// ============================================================
 //  SETTINGS
 // ============================================================
 function setMusicVol(v) { game.settings.musicVol = v/100; const e=document.getElementById("music-vol-val"); if(e)e.innerText=v+"%"; saveGame(); }
@@ -1794,6 +1868,7 @@ function toggleSetting(key, btn) {
     if (pill) { pill.innerText = game.settings[key] ? "ON" : "OFF"; btn.classList.toggle("off", !game.settings[key]); }
     if (key === "musicOn") { game.settings.musicOn ? startAudio() : stopMusic(); }
     if (key === "particles") { const o=document.getElementById("particle-overlay"); if(o)o.style.display=game.settings.particles?"block":"none"; }
+    if (key === "performanceMode" || key === "reduceUiAnim") applyPerformanceProfile();
     saveGame();
 }
 function syncSettingsUI() {
@@ -1802,10 +1877,29 @@ function syncSettingsUI() {
     if (sv) sv.value = Math.round(game.settings.sfxVol*100);
     const mvv=document.getElementById("music-vol-val"); if(mvv)mvv.innerText=Math.round(game.settings.musicVol*100)+"%";
     const svv=document.getElementById("sfx-vol-val"); if(svv)svv.innerText=Math.round(game.settings.sfxVol*100)+"%";
-    [["tg-music","musicOn"],["tg-particles","particles"],["tg-shake","screenShake"],["tg-brainrot","brainrot"]].forEach(([id,k])=>{
+    const platEl = document.getElementById("platform-label");
+    if (platEl) platEl.textContent = game.settings.platform === "mobile" ? "📱 Mobile" : (game.settings.platform === "desktop" ? "💻 PC" : "Not set");
+    [["tg-music","musicOn"],["tg-particles","particles"],["tg-shake","screenShake"],["tg-brainrot","brainrot"],
+     ["tg-perf","performanceMode"],["tg-reduce-ui","reduceUiAnim"]].forEach(([id,k])=>{
         const b=document.getElementById(id); if(!b)return; const p=b.querySelector(".toggle-pill");
         if(p)p.innerText=game.settings[k]?"ON":"OFF"; b.classList.toggle("off",!game.settings[k]);
     });
+    renderSaveSlotsUI();
+}
+function renderSaveSlotsUI() {
+    const wrap = document.getElementById("save-slots-wrap");
+    if (!wrap) return;
+    let html = "";
+    for (let i = 1; i <= 3; i++) {
+        const has = !!localStorage.getItem("fartSlot_" + i);
+        html += '<div class="save-slot-card"><div class="save-slot-head"><span class="save-slot-num">Slot ' + i + '</span>' +
+            '<span class="save-slot-status">' + (has ? "💾 Saved" : "Empty") + '</span></div>' +
+            '<div class="save-slot-actions">' +
+            '<button class="set-action slot-btn" onclick="saveSlotExport(' + i + ')">Save</button>' +
+            '<button class="set-action slot-btn" onclick="saveSlotLoad(' + i + ')"' + (has ? "" : " disabled") + '>Load</button>' +
+            '</div></div>';
+    }
+    wrap.innerHTML = html;
 }
 function setCodeStatus(text, ok) {
     const el = document.getElementById("code-status");
@@ -2049,8 +2143,11 @@ function showPetTab(name, btn) {
 function petChip(p, equipped) {
     const r = RARITY[p.rarity] || RARITY.common;
     const stars = p.star ? '<span class="pet-stars">' + "⭐".repeat(Math.min(p.star,5)) + '</span>' : '';
-    return '<div class="pet-chip ' + (equipped?"equipped":"") + '" style="border-color:' + r.color + ';color:' + r.color + '" onclick="openPetModal(' + p.id + ')">' +
-        '<span class="pet-chip-emoji">' + iconHTML(p.emoji||"🐾", "pet-icon-img", p.name) + '</span>' + stars +
+    let tags = "";
+    if (p.shiny) tags += '<span class="pet-tag shiny">✨</span>';
+    if (p.trait) tags += '<span class="pet-tag trait">🧬</span>';
+    return '<div class="pet-chip ' + (equipped?"equipped":"") + (p.shiny?" pet-shiny":"") + '" style="border-color:' + r.color + ';color:' + r.color + '" onclick="openPetModal(' + p.id + ')">' +
+        '<span class="pet-chip-emoji">' + iconHTML(p.emoji||"🐾", "pet-icon-img", p.name) + '</span>' + stars + tags +
         '<span class="pet-chip-name">' + p.name + '</span>' +
         '<span class="pet-chip-pow">' + p.power.toFixed(2) + 'x</span>' +
         (equipped?'<span class="pet-chip-badge">✓</span>':'') + '</div>';
@@ -2414,7 +2511,9 @@ function renderEggShop() {
     let html = "";
     if (typeof currentMemePet === "function") {
         const meme = currentMemePet();
-        html += '<div class="meme-week-banner">🔥 Meme of the Week: <b>' + meme.emoji + " " + meme.name + '</b> — boosted in pool!</div>';
+        const daysLeft = typeof memeWeekDaysLeft === "function" ? memeWeekDaysLeft() : 7;
+        html += '<div class="meme-week-banner">🔥 Meme of the Week: <b>' + meme.emoji + " " + meme.name +
+            '</b> — ~3.5% hatch chance · <span class="meme-timer">' + daysLeft + 'd left</span></div>';
     }
     html += '<div class="egg-grid">';
     getEggTemplates().forEach((egg, idx) => {
@@ -2466,6 +2565,11 @@ function rollEggMulti(idx, count) {
     playHatch(results[0].pet, results[0].egg);
 }
 function pickFromEgg(egg) {
+    if (typeof currentMemePet === "function" && Math.random() < 0.035) {
+        const meme = currentMemePet();
+        const w = game.worldIdx || 0;
+        return { name: meme.name, emoji: meme.emoji, rarity: "rare", base: 40 + w * 8, odds: 0 };
+    }
     const pets = scaleEggPets(egg);
     let roll = Math.random() * 100, chosen = pets[0];
     for (const p of pets) { if (roll < p.odds) { chosen = p; break; } roll -= p.odds; }
@@ -2885,7 +2989,7 @@ let ambientTimer = null;
 function startAmbientParticles() {
     if (ambientTimer) return;
     ambientTimer = setInterval(() => {
-        if (!pageVisible || !game.settings.particles || fxNodeCount >= FX_SOFT_LIMIT) return;
+        if (!pageVisible || !game.settings.particles || fxNodeCount >= fxSoftLimit()) return;
         const layer = fxLayer(); if (!layer) return;
         const btn = byId("main-btn"); if (!btn) return;
         const rect = btn.getBoundingClientRect();
@@ -2935,7 +3039,7 @@ function spawnConfetti(color, count) {
     const colors = [color, "#fff", "#FFD54A", "#00E0FF", "#FF3D9A"];
     const max = Math.min(count, fxBudget(), 28);
     for (let i = 0; i < max; i++) {
-        if (fxNodeCount >= FX_NODE_LIMIT) break;
+        if (fxNodeCount >= fxNodeLimit()) break;
         const p = document.createElement("div"); p.className = "confetti";
         p.style.left="50%"; p.style.top="44%"; p.style.background = colors[i%colors.length];
         const ang = Math.random()*Math.PI*2, dist = 90+Math.random()*300;
@@ -2948,7 +3052,7 @@ function burstAt(x, y, color, count) {
     if (!game.settings.particles) return; const layer = fxLayer(); if (!layer) return;
     const max = Math.min(count, fxBudget(), 16);
     for (let i = 0; i < max; i++) {
-        if (fxNodeCount >= FX_NODE_LIMIT) break;
+        if (fxNodeCount >= fxNodeLimit()) break;
         const p = document.createElement("div"); p.className = "confetti";
         p.style.left = x+"px"; p.style.top = y+"px"; p.style.background = Math.random()<0.5?color:"#fff";
         const ang = Math.random()*Math.PI*2, dist = 40+Math.random()*150;
@@ -3092,6 +3196,14 @@ function updateDisplay() {
         const bar = byId("brainrot-fill");
         if (bar) bar.style.width = Math.min(100, bl) + "%";
         setTxt("brainrot-lvl", "Lv " + bl);
+        const mini = document.querySelector(".brainrot-mini");
+        if (mini) mini.classList.toggle("milestone", bl > 0 && bl % 10 === 0);
+    }
+    const ascBadge = byId("asc-badge");
+    if (ascBadge) {
+        const asc = (game.meta && game.meta.ascension) || game.ascension || 0;
+        if (asc > 0) { ascBadge.textContent = "☄" + asc; ascBadge.classList.remove("hidden"); }
+        else ascBadge.classList.add("hidden");
     }
     if (typeof renderInvasionHud === "function") renderInvasionHud();
     const rb = byId("rebirth-btn");
@@ -3124,7 +3236,10 @@ function initGame() {
     loadGame();
     if (typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches) {
         game.settings.particles = false;
+        game.settings.performanceMode = true;
+        game.settings.reduceUiAnim = true;
     }
+    applyPerformanceProfile();
     hatchActive = false;
     hatchMultiSession = false;
     hatchQueue = [];
@@ -3158,6 +3273,7 @@ function initGame() {
     startAmbientEffects();
     addCornerGlows();
     if (typeof initMeta === "function") initMeta();
+    maybeShowPlatformPicker();
 }
 
 // ============================================================
@@ -3170,7 +3286,7 @@ function getWorldColors() {
 
 // Corner glows — 4 permanent blobs in screen corners
 function addCornerGlows() {
-    if (!game.settings.particles || byId("corner-glow-tl")) return;
+    if (!game.settings.particles || isPerformanceMode() || byId("corner-glow-tl")) return;
     ["tl","tr","bl","br"].forEach((pos, i) => {
         const el = document.createElement("div");
         el.className = "corner-glow " + pos;
@@ -3190,7 +3306,7 @@ function updateCornerGlows() {
 
 // Floating orbs that drift slowly across the screen
 function spawnAmbOrb() {
-    if (!pageVisible || !game.settings.particles || fxNodeCount >= FX_SOFT_LIMIT) return;
+    if (!pageVisible || !game.settings.particles || isPerformanceMode() || fxNodeCount >= fxSoftLimit()) return;
     const colors = getWorldColors();
     const el = document.createElement("div");
     el.className = "amb-orb";
@@ -3210,7 +3326,7 @@ function spawnAmbOrb() {
 
 // Shooting streaks flying across the screen
 function spawnAmbStreak() {
-    if (!pageVisible || !game.settings.particles || fxNodeCount >= FX_SOFT_LIMIT) return;
+    if (!pageVisible || !game.settings.particles || isPerformanceMode() || fxNodeCount >= fxSoftLimit()) return;
     const colors = getWorldColors();
     const el = document.createElement("div");
     el.className = "amb-streak";
@@ -3228,7 +3344,7 @@ function spawnAmbStreak() {
 
 // Pulsing rings that expand from random spots
 function spawnAmbRing() {
-    if (!pageVisible || !game.settings.particles || fxNodeCount >= FX_SOFT_LIMIT) return;
+    if (!pageVisible || !game.settings.particles || isPerformanceMode() || fxNodeCount >= fxSoftLimit()) return;
     const colors = getWorldColors();
     const el = document.createElement("div");
     el.className = "amb-ring";
@@ -3245,7 +3361,7 @@ function spawnAmbRing() {
 
 // Floating sparkle dots
 function spawnAmbSpark() {
-    if (!pageVisible || !game.settings.particles || fxNodeCount >= FX_SOFT_LIMIT) return;
+    if (!pageVisible || !game.settings.particles || isPerformanceMode() || fxNodeCount >= fxSoftLimit()) return;
     const colors = getWorldColors();
     const el = document.createElement("div");
     el.className = "amb-spark";
@@ -3258,7 +3374,7 @@ function spawnAmbSpark() {
 }
 
 function spawnAmbRune() {
-    if (!pageVisible || !game.settings.particles || fxNodeCount >= FX_SOFT_LIMIT) return;
+    if (!pageVisible || !game.settings.particles || isPerformanceMode() || fxNodeCount >= fxSoftLimit()) return;
     const colors = getWorldColors();
     const el = document.createElement("div");
     el.className = "amb-rune";
