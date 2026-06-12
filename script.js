@@ -599,6 +599,91 @@ function vHat(ctx, t, vol) {
     g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(0.001, t+0.06);
     s.connect(f); f.connect(g); g.connect(m||ctx.destination); s.start(t); s.stop(t+0.07);
 }
+function vPluck(ctx, t, freq, vol, master) {
+    const g = vEnv(ctx, vol, 0.003, 0.35, t);
+    const o = ctx.createOscillator(); o.type = "triangle"; o.frequency.value = freq;
+    o.connect(g); g.connect(master); routeWet(g);
+    o.start(t); o.stop(t + 0.4);
+}
+function vOrgan(ctx, t, freq, vol, master) {
+    const g = vEnv(ctx, vol * 0.7, 0.02, 1.1, t);
+    [1, 2, 3, 4, 6].forEach((h, i) => {
+        const o = ctx.createOscillator(); o.type = "sine"; o.frequency.value = freq * h;
+        const hg = ctx.createGain(); hg.gain.value = 1 / (i + 1.2);
+        o.connect(hg); hg.connect(g); o.start(t); o.stop(t + 1.2);
+    });
+    g.connect(master); routeWet(g);
+}
+function vPulse(ctx, t, freq, vol, master) {
+    const g = vEnv(ctx, vol, 0.004, 0.42, t);
+    const o = ctx.createOscillator(); o.type = "square"; o.frequency.value = freq;
+    const f = ctx.createBiquadFilter(); f.type = "lowpass"; f.frequency.value = 2200;
+    o.connect(f); f.connect(g); g.connect(master);
+    o.start(t); o.stop(t + 0.48);
+}
+function vStrings(ctx, t, freq, vol, master) {
+    const g = vEnv(ctx, vol * 0.55, 0.08, 1.3, t);
+    [-9, 0, 9].forEach(det => {
+        const o = ctx.createOscillator(); o.type = "sawtooth"; o.frequency.value = freq; o.detune.value = det;
+        const f = ctx.createBiquadFilter(); f.type = "lowpass"; f.frequency.value = 2800;
+        o.connect(f); f.connect(g); o.start(t); o.stop(t + 1.45);
+    });
+    g.connect(master); routeWet(g);
+}
+function vFlute(ctx, t, freq, vol, master) {
+    const g = vEnv(ctx, vol * 0.85, 0.04, 0.9, t);
+    const o = ctx.createOscillator(); o.type = "sine"; o.frequency.value = freq;
+    const lfo = ctx.createOscillator(); lfo.frequency.value = 5.5;
+    const lg = ctx.createGain(); lg.gain.value = freq * 0.012;
+    lfo.connect(lg); lg.connect(o.frequency);
+    o.connect(g); g.connect(master); routeWet(g);
+    lfo.start(t); o.start(t); lfo.stop(t + 1); o.stop(t + 1);
+}
+function vBrass(ctx, t, freq, vol, master) {
+    const g = vEnv(ctx, vol, 0.01, 0.55, t);
+    const o = ctx.createOscillator(); o.type = "sawtooth"; o.frequency.value = freq;
+    const f = ctx.createBiquadFilter(); f.type = "bandpass"; f.frequency.value = freq * 2.2; f.Q.value = 2.8;
+    o.connect(f); f.connect(g); g.connect(master); routeWet(g);
+    o.start(t); o.stop(t + 0.6);
+}
+function vBell(ctx, t, freq, vol, master) {
+    const g = vEnv(ctx, vol, 0.002, 1.6, t);
+    const c = ctx.createOscillator(); c.type = "sine"; c.frequency.value = freq;
+    const m = ctx.createOscillator(); m.type = "sine"; m.frequency.value = freq * 2.4;
+    const mg = ctx.createGain();
+    mg.gain.setValueAtTime(freq * 0.8, t); mg.gain.exponentialRampToValueAtTime(1, t + 0.02);
+    m.connect(mg); mg.connect(c.frequency);
+    c.connect(g); g.connect(master); routeWet(g);
+    m.start(t); c.start(t); m.stop(t + 1.7); c.stop(t + 1.7);
+}
+function vBass808(ctx, t, freq, vol, master) {
+    const o = ctx.createOscillator(); o.type = "sine";
+    o.frequency.setValueAtTime(freq * 1.8, t);
+    o.frequency.exponentialRampToValueAtTime(freq, t + 0.08);
+    const g = vEnv(ctx, vol, 0.004, 0.85, t);
+    const d = ctx.createWaveShaper();
+    const curve = new Float32Array(256);
+    for (let i = 0; i < 256; i++) { const x = (i / 128) - 1; curve[i] = Math.tanh(x * 2.5); }
+    d.curve = curve;
+    o.connect(d); d.connect(g); g.connect(master);
+    o.start(t); o.stop(t + 0.9);
+}
+function playVoice(ctx, t, voice, freq, vol, master) {
+    switch (voice) {
+        case "marimba": vMarimba(ctx, t, freq, vol, master); break;
+        case "ep":      vEP(ctx, t, freq, vol, master); break;
+        case "chime":   vChime(ctx, t, freq, vol * 1.1, master); break;
+        case "pluck":   vPluck(ctx, t, freq, vol, master); break;
+        case "organ":   vOrgan(ctx, t, freq, vol, master); break;
+        case "pulse":   vPulse(ctx, t, freq, vol, master); break;
+        case "strings": vStrings(ctx, t, freq, vol, master); break;
+        case "flute":   vFlute(ctx, t, freq, vol, master); break;
+        case "brass":   vBrass(ctx, t, freq, vol, master); break;
+        case "bell":    vBell(ctx, t, freq, vol, master); break;
+        case "bass808": vBass808(ctx, t, freq, vol * 1.15, master); break;
+        default:        vPad(ctx, t, freq, vol * 0.85, master);
+    }
+}
 
 // ---------- 20 world song definitions ----------
 // Each song: bpm, key (semitones from A2), voice, and 4 melody sections
@@ -819,9 +904,78 @@ const SONG_FORM = [
     { section: 0, bars: 4  },  // outro  (melody 0, fade)
 ]; // total 44 bars, then loops
 
-const PHONK = { idx: 0, step: 0, timer: null, playing: false, bars: 0, formIdx: 0, formBar: 0 };
+const WORLD_TRACK_NAMES = [
+    ["Basement Dreams", "Moldy Lullaby", "Pipe Drip Echo"],
+    ["Sewer Groove", "Sludge Bossa", "Toxic Bounce"],
+    ["Toilet Lounge", "Skibidi Bounce", "Flush Phonk"],
+    ["Rizz Waltz", "Gyatt Slide", "Sigma Shuffle"],
+    ["Ohio Breeze", "Cornfield Jam", "Only In Ohio"],
+    ["Starfield Drift", "Nebula Haze", "Void Cruise"],
+    ["Canyon Winds", "Desert Mirage", "Sandstorm Funk"],
+    ["Ember Glow", "Hellfire March", "Lava Pulse"],
+    ["Sigma Pulse", "Chrome Streets", "Algorithm Run"],
+    ["Dimension Drift", "Glitch Portal", "Phase Shift"],
+    ["Quantum Flow", "Particle Dance", "Collapse Wave"],
+    ["Grimace Wave", "Purple Shake", "Brainrot Bop"],
+    ["Mewing Clouds", "Jawline Ascend", "Sky Whisper"],
+    ["Inferno March", "Brimstone Beat", "Doom Roller"],
+    ["Crystal Bells", "Gemstone Echo", "Prism Shine"],
+    ["Mirror Echo", "Reflection Loop", "Twin Phase"],
+    ["Galactic Drift", "Cosmos Groove", "Supernova Rise"],
+    ["Time Spiral", "Chrono Tick", "Paradox Loop"],
+    ["Gigachad Anthem", "Max Reps", "Sigma Gym Phonk"],
+    ["Final Stench", "Omega Stink", "Last Brainrot"]
+];
+const WORLD_VOICE_POOLS = [
+    ["pad", "pluck", "pulse"], ["marimba", "organ", "bass808"], ["ep", "pulse", "brass"],
+    ["chime", "strings", "flute"], ["marimba", "pluck", "bell"], ["pad", "strings", "bell"],
+    ["pluck", "brass", "marimba"], ["organ", "bass808", "pulse"], ["ep", "bass808", "pulse"],
+    ["pulse", "flute", "chime"], ["ep", "bell", "strings"], ["organ", "pulse", "marimba"],
+    ["pad", "flute", "chime"], ["brass", "bass808", "pulse"], ["chime", "bell", "pluck"],
+    ["ep", "strings", "flute"], ["pad", "strings", "brass"], ["chime", "pluck", "organ"],
+    ["bass808", "brass", "pulse"], ["marimba", "strings", "brass"]
+];
+const WORLD_BPM_TRIPLES = [
+    [70, 62, 78], [82, 74, 90], [88, 96, 104], [76, 84, 72], [66, 74, 80],
+    [72, 68, 80], [80, 88, 76], [68, 92, 84], [90, 98, 86], [74, 70, 82],
+    [78, 86, 94], [84, 92, 100], [65, 72, 60], [92, 100, 88], [72, 80, 68],
+    [76, 68, 84], [68, 76, 84], [80, 88, 72], [94, 102, 88], [88, 96, 104]
+];
+const DRUM_VARIANTS = [
+    { kicks: [1,0,0,0,1,0,0,0,1,0,0,0,1,0,0,0], hats: [0,1,0,1,0,1,0,1,0,1,0,1,0,1,1,0] },
+    { kicks: [1,0,0,1,0,0,1,0,1,0,0,1,0,0,1,0], hats: [1,0,1,0,1,1,0,1,1,0,1,0,1,1,0,1] },
+    { kicks: [1,0,0,0,0,0,0,0,1,0,0,0,0,0,1,0], hats: [0,0,1,0,0,0,1,0,0,0,1,0,0,0,0,1] }
+];
+function buildWorldTrackSets() {
+    const sets = [];
+    for (let w = 0; w < 20; w++) {
+        const tracks = [];
+        for (let t = 0; t < 3; t++) {
+            const src = WORLD_SONGS[(w + t * 7) % WORLD_SONGS.length];
+            const drums = DRUM_VARIANTS[t];
+            tracks.push({
+                name: WORLD_TRACK_NAMES[w][t],
+                bpm: WORLD_BPM_TRIPLES[w][t],
+                key: src.key + (t * 2 - 2),
+                voice: WORLD_VOICE_POOLS[w][t],
+                progs: src.progs,
+                melodies: src.melodies,
+                kicks: drums.kicks,
+                hats: drums.hats
+            });
+        }
+        sets.push(tracks);
+    }
+    return sets;
+}
+const WORLD_TRACK_SETS = buildWorldTrackSets();
 
-function getSong() { return WORLD_SONGS[game.worldIdx % WORLD_SONGS.length]; }
+const PHONK = { trackIdx: 0, step: 0, timer: null, playing: false, bars: 0, formIdx: 0, formBar: 0 };
+
+function getSong() {
+    const tracks = WORLD_TRACK_SETS[game.worldIdx % WORLD_TRACK_SETS.length] || WORLD_TRACK_SETS[0];
+    return tracks[PHONK.trackIdx % 3];
+}
 
 function currentSection() {
     let bar = PHONK.bars % 44;
@@ -876,14 +1030,8 @@ function phonkTick() {
     if (note !== null && note !== undefined) {
         const freq = midiHz(note + root + 12);
         const vol = 0.10 * game.settings.musicVol;
-        const master = ensureMaster(); if (master) {
-            switch (song.voice) {
-                case "marimba": vMarimba(ctx, t, freq, vol, master); break;
-                case "ep":      vEP(ctx, t, freq, vol, master); break;
-                case "chime":   vChime(ctx, t, freq, vol*1.1, master); break;
-                default:        vPad(ctx, t, freq, vol*0.85, master);
-            }
-        }
+        const master = ensureMaster();
+        if (master) playVoice(ctx, t, song.voice, freq, vol, master);
     }
 
     // bass on beat 1 and 3 of bar
@@ -896,12 +1044,11 @@ function phonkTick() {
     if (PHONK.step % 16 === 0) PHONK.bars++;
 }
 
-function worldTrackIdx() { return game.worldIdx % WORLD_SONGS.length; }
 function worldKey() { return getSong().key; }
 function announceTrack() {
     const song = getSong();
     const el = document.getElementById("now-playing");
-    if (el) el.textContent = "♪ " + song.name;
+    if (el) el.textContent = "♪ " + song.name + " (" + (PHONK.trackIdx + 1) + "/3)";
 }
 function curStepMs() { return (60000 / getSong().bpm) / 4; }
 
@@ -910,7 +1057,6 @@ function startMusic() {
     const ctx = getCtx(); if (!ctx) return;
     ensureMaster();
     PHONK.playing = true;
-    PHONK.step = 0; PHONK.bars = 0;
     announceTrack();
     const loop = () => {
         if (!PHONK.playing) return;
@@ -921,8 +1067,18 @@ function startMusic() {
 }
 function stopMusic() { PHONK.playing = false; if (PHONK.timer) { clearTimeout(PHONK.timer); PHONK.timer = null; } }
 function skipTrack() {
+    PHONK.trackIdx = (PHONK.trackIdx + 1) % 3;
+    PHONK.step = 0; PHONK.bars = 0;
     stopMusic();
+    announceTrack();
     setTimeout(() => { if (game.settings.musicOn) startMusic(); }, 80);
+}
+function restartWorldMusic() {
+    PHONK.trackIdx = 0;
+    PHONK.step = 0; PHONK.bars = 0;
+    stopMusic();
+    if (game.settings.musicOn) startMusic();
+    else announceTrack();
 }
 
 
@@ -1463,10 +1619,10 @@ function renderWorlds() {
 function selectWorld(i) {
     const w = WORLDS[i]; if (!w || game.rebirths < w.reqRebirths) { sfxError(); return; }
     game.worldIdx = i; indexWorld = i; sfxBuy(); updateDisplay(); renderWorlds(); saveGame();
-    PHONK.idx = worldTrackIdx(); PHONK.step = 0; announceTrack();
+    restartWorldMusic();
     applyWorldTheme(); updateCornerGlows();
     screenFlash(w.theme && w.theme.p ? w.theme.p : "#ffd54a");
-    showToast("🌍 Travelled to " + w.name + " · 🎵 " + TRACKS[PHONK.idx].name, 2400);
+    showToast("🌍 Travelled to " + w.name + " · 🎵 " + getSong().name, 2400);
 }
 
 
@@ -1943,7 +2099,67 @@ function rollEgg(idx) {
 // ============================================================
 //  HATCH ANIMATION — cinematic, rarity-scaled suspense
 // ============================================================
+function playHatchTurbo(pet, egg) {
+    clearHatchAnim();
+    hatchActive = true; pendingHatch = pet;
+    const r = RARITY[pet.rarity] || RARITY.common;
+    const overlay = document.getElementById("hatch-overlay");
+    const eggEl = document.getElementById("hatch-egg");
+    const resEl = document.getElementById("hatch-result");
+    const rays = document.getElementById("hatch-rays");
+    const skip = document.getElementById("hatch-skip");
+    if (!overlay || !eggEl || !resEl) return;
+    closeEggModal();
+
+    const tier = r.tier;
+    const buildTime = [80, 120, 180, 260, 360, 480][tier] || 80;
+    const advanceTime = [140, 170, 210, 260, 320, 380][tier] || 140;
+
+    if (rays) rays.style.opacity = "0";
+    resEl.innerHTML = ""; resEl.className = "hatch-result";
+    setIconNode(eggEl, egg.emoji, "hatch-egg-img", egg.name);
+    eggEl.className = "hatch-egg"; eggEl.style.filter = "";
+    eggEl.style.transform = ""; eggEl.style.opacity = "1";
+    overlay.style.setProperty("--rc", r.color);
+    overlay.className = "hatch-overlay tier" + tier + " turbo";
+    overlay.style.background = "rgba(5,2,12,0.97)";
+    if (skip) { skip.textContent = "Opening x" + (hatchQueue.length + 1) + "..."; skip.style.opacity = "0.35"; skip.style.pointerEvents = "none"; }
+    overlay.classList.remove("hidden");
+
+    hatchDelay(() => {
+        eggEl.style.transition = "transform " + (buildTime / 1000) + "s ease, filter 0.12s ease";
+        eggEl.style.transform = "scale(" + (1.06 + tier * 0.05) + ")";
+        eggEl.style.filter = "drop-shadow(0 0 " + (6 + tier * 6) + "px " + r.color + ")";
+    }, 15);
+
+    hatchDelay(() => {
+        eggEl.style.transition = "transform 0.07s ease, opacity 0.07s ease";
+        eggEl.style.transform = "scale(0)";
+        eggEl.style.opacity = "0";
+        if (tier >= 2) { screenFlash(r.color); shockwave(r.color); }
+        if (tier >= 4) shake();
+        sfxRare(Math.min(tier, 4));
+        if (tier >= 1) spawnConfetti(r.color, 6 + tier * 3);
+
+        hatchDelay(() => {
+            setIconNode(eggEl, pet.emoji, "hatch-pet-img", pet.name);
+            eggEl.style.opacity = "1";
+            eggEl.style.transition = "transform 0.22s cubic-bezier(0.34,1.56,0.64,1)";
+            eggEl.style.transform = "scale(1)";
+            eggEl.className = "hatch-egg reveal tier" + tier;
+            const stars = pet.star ? "⭐".repeat(Math.min(pet.star, 5)) : "";
+            resEl.innerHTML =
+                '<div class="hatch-rarity" style="color:' + r.color + '">' + r.label + (stars ? " " + stars : "") + '</div>' +
+                '<div class="hatch-name">' + pet.name + '</div>' +
+                '<div class="hatch-power" style="color:' + r.color + '">' + pet.power.toFixed(2) + 'x click power</div>';
+            resEl.classList.add("show");
+            hatchTimeout = setTimeout(finishHatch, advanceTime);
+        }, 45 + tier * 10);
+    }, buildTime);
+}
+
 function playHatch(pet, egg) {
+    if (hatchMultiSession) return playHatchTurbo(pet, egg);
     clearHatchAnim();
     hatchActive = true; pendingHatch = pet;
     const r = RARITY[pet.rarity] || RARITY.common;
@@ -2161,7 +2377,8 @@ function finishHatch() {
     document.body.classList.remove("slowmo");
     if (hatchQueue.length > 0) {
         const next = hatchQueue.shift();
-        hatchAnimTimers.push(setTimeout(() => playHatch(next.pet, next.egg), 350));
+        const gap = hatchMultiSession ? 50 : 350;
+        hatchAnimTimers.push(setTimeout(() => playHatch(next.pet, next.egg), gap));
         return;
     }
     hatchMultiSession = false;
