@@ -257,6 +257,94 @@
 .code-status.ok { color: var(--green); text-shadow: 0 0 10px var(--green); }
 .code-status.bad { color: var(--pink); }
 
+/* ---- generated AI brainrot image icons ---- */
+.asset-icon {
+    display: inline-block;
+    width: 1em;
+    height: 1em;
+    vertical-align: middle;
+    background-image: url("assets/brainrot-skibidi-asset-pack.png");
+    background-size: 400% 400%;
+    background-repeat: no-repeat;
+    border-radius: 24%;
+    filter:
+        saturate(1.16)
+        contrast(1.08)
+        drop-shadow(0 0 0.18em rgba(255,255,255,0.32))
+        drop-shadow(0 0 0.36em currentColor);
+}
+.asset-i-0 { background-position: 0% 0%; }
+.asset-i-1 { background-position: 33.333% 0%; }
+.asset-i-2 { background-position: 66.666% 0%; }
+.asset-i-3 { background-position: 100% 0%; }
+.asset-i-4 { background-position: 0% 33.333%; }
+.asset-i-5 { background-position: 33.333% 33.333%; }
+.asset-i-6 { background-position: 66.666% 33.333%; }
+.asset-i-7 { background-position: 100% 33.333%; }
+.asset-i-8 { background-position: 0% 66.666%; }
+.asset-i-9 { background-position: 33.333% 66.666%; }
+.asset-i-10 { background-position: 66.666% 66.666%; }
+.asset-i-11 { background-position: 100% 66.666%; }
+.asset-i-12 { background-position: 0% 100%; }
+.asset-i-13 { background-position: 33.333% 100%; }
+.asset-i-14 { background-position: 66.666% 100%; }
+.asset-i-15 { background-position: 100% 100%; }
+
+.main-emoji {
+    display: grid;
+    place-items: center;
+}
+.main-icon-img {
+    width: clamp(4.8rem, 21vw, 7.6rem);
+    height: clamp(4.8rem, 21vw, 7.6rem);
+    border-radius: 28%;
+}
+.logo-icon-img { width: 1.25rem; height: 1.25rem; margin-right: 6px; }
+.nav-icon-img { width: 1.75rem; height: 1.75rem; }
+.offline-icon-img { width: 4.8rem; height: 4.8rem; }
+.up-ico-img { width: 2.2rem; height: 2.2rem; }
+.world-icon-img { width: 2.8rem; height: 2.8rem; }
+.pet-icon-img { width: 2.25rem; height: 2.25rem; }
+.dex-icon-img { width: 2.35rem; height: 2.35rem; }
+.dex-chip-img { width: 1.1rem; height: 1.1rem; margin-right: 4px; }
+.pet-modal-icon-img { width: 5rem; height: 5rem; }
+.egg-icon-img { width: 4.2rem; height: 4.2rem; }
+.odds-icon-img { width: 1rem; height: 1rem; margin-right: 4px; }
+.hatch-egg-img,
+.hatch-pet-img {
+    width: min(32vw, 9rem);
+    height: min(32vw, 9rem);
+    border-radius: 30%;
+}
+.hfx-core-img { width: 4rem; height: 4rem; }
+.hfx-dot-img { width: 1.35rem; height: 1.35rem; }
+.hfx-glyph-img { width: 1.35em; height: 1.35em; }
+.hatch-sigil-img { width: 1.25em; height: 1.25em; }
+.fx-icon-img,
+.rain-icon-img,
+.bonus-icon-img,
+.orbit-icon-img {
+    width: 1.35em;
+    height: 1.35em;
+}
+.golden-fart {
+    display: grid;
+    place-items: center;
+}
+.golden-fart .bonus-icon-img {
+    width: 3rem;
+    height: 3rem;
+}
+.pet-chip-emoji,
+.dex-emoji,
+.egg-emoji,
+.world-icon,
+.up-ico,
+.pet-modal-emoji {
+    display: grid;
+    place-items: center;
+}
+
 
 /* ============================================================
    PERFORMANCE + DETAIL PASS
