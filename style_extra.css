@@ -116,7 +116,7 @@
     border-radius: 50%;
     pointer-events: none;
     z-index: -1;
-    filter: blur(40px);
+    filter: blur(24px);
     opacity: 0;
     animation: orbDrift linear infinite;
 }
@@ -178,11 +178,11 @@
 /* Corner glow blobs that slowly breathe */
 .corner-glow {
     position: fixed;
-    width: 300px; height: 300px;
+    width: 260px; height: 260px;
     border-radius: 50%;
     pointer-events: none;
     z-index: -2;
-    filter: blur(80px);
+    filter: blur(48px);
     opacity: 0.18;
     animation: cornerBreathe 5s ease-in-out infinite alternate;
 }
@@ -256,6 +256,24 @@
 }
 .code-status.ok { color: var(--green); text-shadow: 0 0 10px var(--green); }
 .code-status.bad { color: var(--pink); }
+
+/* ---- perf: isolate FX layer, cheap particle glyphs ---- */
+#golden-layer {
+    contain: layout style paint;
+    pointer-events: none;
+}
+.fx-emoji {
+    display: inline-block;
+    line-height: 1;
+    filter: none !important;
+    pointer-events: none;
+    will-change: transform, opacity;
+}
+.click-puff.fx-emoji,
+.emoji-rain.fx-emoji,
+.btn-orbit .fx-emoji {
+    text-shadow: 0 0 8px rgba(255, 255, 255, 0.35);
+}
 
 /* ---- unique transparent icon atlas (square cells, no squish) ---- */
 .game-icon {
