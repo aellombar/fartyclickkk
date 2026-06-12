@@ -1461,6 +1461,111 @@ body::before {
 .meme-week-banner { text-align: center; padding: 8px 10px; margin-bottom: 10px; border-radius: 12px; background: linear-gradient(135deg, rgba(255,61,154,0.25), rgba(255,138,61,0.25)); border: 1px solid rgba(255,61,154,0.5); font-size: 0.78rem; font-weight: 700; }
 .slot-row { display: flex; gap: 8px; margin-bottom: 6px; }
 .slot-btn { flex: 1; padding: 10px !important; font-size: 0.82rem !important; }
+.save-slots-wrap { display: flex; flex-direction: column; gap: 8px; }
+.save-slot-card { padding: 10px 12px; border-radius: 12px; border: 1px solid var(--stroke); background: rgba(0,0,0,0.28); }
+.save-slot-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; font-size: 0.82rem; }
+.save-slot-num { font-weight: 700; color: var(--cyan); }
+.save-slot-status { font-size: 0.72rem; color: var(--muted); }
+.save-slot-actions { display: flex; gap: 8px; }
+.save-slot-actions .slot-btn { margin: 0; }
+.save-slot-actions .slot-btn:disabled { opacity: 0.35; cursor: not-allowed; }
+
+.platform-modal-content { text-align: center; max-width: 340px; }
+.platform-sub { font-size: 0.82rem; color: var(--muted); margin: 8px 0 16px; line-height: 1.4; }
+.platform-pick {
+    width: 100%; text-align: left; padding: 14px; margin-bottom: 10px;
+    border: 1px solid var(--stroke); border-radius: 14px;
+    background: rgba(0,0,0,0.35); color: #fff; cursor: pointer;
+    font-family: 'Fredoka', sans-serif; display: grid; grid-template-columns: 40px 1fr; gap: 4px 10px;
+}
+.platform-pick:active { transform: scale(0.98); }
+.platform-ico { font-size: 1.6rem; grid-row: span 2; align-self: center; }
+.platform-name { font-weight: 700; font-size: 1rem; color: var(--gold); }
+.platform-desc { font-size: 0.72rem; color: var(--muted); grid-column: 2; }
+#platform-modal { z-index: 200; }
+#platform-modal .modal-content { z-index: 201; }
+
+.asc-badge { font-size: 0.7rem; background: rgba(0,255,208,0.2); color: #00ffd0; padding: 2px 8px; border-radius: 10px; }
+.asc-badge.hidden { display: none; }
+.offline-factory { font-size: 0.78rem; color: var(--muted); margin: 8px 0 12px; min-height: 1.2em; }
+.brainrot-mini.milestone { border-color: var(--gold); box-shadow: 0 0 12px rgba(255,213,74,0.25); }
+.brainrot-bar-wrap.milestone { border-color: var(--gold); box-shadow: 0 0 16px rgba(255,213,74,0.2); }
+.ach-filters { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
+.ach-filter { padding: 6px 10px; border-radius: 10px; border: 1px solid var(--stroke); background: rgba(0,0,0,0.3); color: var(--muted); font-family: 'Fredoka', sans-serif; font-size: 0.72rem; font-weight: 700; cursor: pointer; }
+.ach-filter.active { background: var(--purple); color: #fff; border-color: var(--purple); }
+.ach-row.secret { opacity: 0.7; }
+.pet-tag { font-size: 0.62rem; margin-left: 2px; }
+.pet-shiny { box-shadow: 0 0 10px rgba(255,213,74,0.35); }
+.meme-timer { color: var(--gold); }
+
+/* ---- PERFORMANCE MODE (mobile / user toggle) ---- */
+html.perf-mode #animated-bg { animation: none !important; }
+html.perf-mode body::before,
+html.perf-mode .stats-panel::after,
+html.perf-mode .stat-cell::before,
+html.perf-mode .up-card:not(.locked)::after,
+html.perf-mode .aura-card:not(.locked)::after,
+html.perf-mode .rebirth-btn.ready::after,
+html.perf-mode .egg-card::after,
+html.perf-mode .main-click-btn::before,
+html.perf-mode .main-click-btn::after,
+html.perf-mode .corner-glow {
+    animation: none !important;
+    display: none !important;
+}
+html.perf-mode .logo-mini,
+html.perf-mode .hero-value {
+    animation: none !important;
+}
+html.perf-mode .main-click-btn { animation: none !important; }
+html.perf-mode .stats-panel,
+html.perf-mode .bottom-nav,
+html.perf-mode .sheet-overlay {
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+}
+html.perf-mode .up-card,
+html.perf-mode .aura-card,
+html.perf-mode .pet-chip,
+html.perf-mode .world-card,
+html.perf-mode .egg-card,
+html.perf-mode .stat-cell {
+    will-change: auto !important;
+    contain: layout style paint;
+}
+html.perf-mode .up-card:not(.locked):hover,
+html.perf-mode .aura-card:not(.locked):hover,
+html.perf-mode .egg-card:hover {
+    transform: none !important;
+    filter: none !important;
+}
+html.perf-mode .garden-plot.ready { animation: none !important; }
+html.reduce-ui-anim .up-tab.active { animation: none !important; }
+html.reduce-ui-anim .stab,
+html.reduce-ui-anim .nav-btn {
+    transition: none !important;
+}
+
+@media (max-width: 390px) {
+    .logo-mini { font-size: 1rem; }
+    .stats-panel { padding: 10px; margin-bottom: 8px; border-radius: 16px; }
+    .brainrot-mini { margin: 4px 0; padding: 4px 8px; }
+    .brainrot-mini-title { font-size: 0.6rem; }
+    .brainrot-mini-lvl { font-size: 0.58rem; }
+    .stat-grid-5 { gap: 4px !important; }
+    .stat-cell { padding: 5px 2px; }
+    .stat-label { font-size: 0.5rem; }
+    .stat-value { font-size: 0.78rem; }
+    .hero-value { font-size: clamp(1.6rem, 8vw, 2.2rem); }
+    .main-click-btn { width: min(64vw, 240px); height: min(64vw, 240px); }
+    .combo-wrap { margin-bottom: 10px; }
+    .bottom-nav .nav-txt { display: none; }
+    .bottom-nav .nav-btn { padding: 8px 2px; }
+    .bottom-nav .nav-ico { font-size: 1.15rem; }
+    .rebirth-btn { padding: 10px; font-size: 0.88rem; margin-top: 6px; }
+    .sheet-tabs .stab { font-size: 0.72rem; padding: 8px 4px; }
+    #game-container { padding-left: 8px; padding-right: 8px; }
+}
 
 @media (prefers-reduced-motion: reduce) {
     body::before,

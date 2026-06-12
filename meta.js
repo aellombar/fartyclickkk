@@ -236,7 +236,7 @@ function buildingProduction() {
     BUILDING_SYNERGIES.forEach(s => {
         if ((m.buildings[s.id] || 0) >= s.count && s.bonus === "passive") total *= s.mult;
     });
-    return total * (1 + metaBonus("passive"));
+    return total;
 }
 
 function buyBuilding(id, count) {
@@ -281,8 +281,11 @@ function renderBuildingsTab() {
         const owned = m.buildings[b.id] || 0;
         const locked = peakWorld() < b.reqWorld;
         const cost = buildingCost(b, owned);
-        html += '<button class="up-card ' + (locked ? "locked" : "") + '" onclick="buyBuilding(\'' + b.id + '\',1)">' +
-            '<span class="up-ico">' + b.icon + '</span><div class="up-mid"><div class="up-name">' + b.name + '</div>' +
+        const bm = (typeof buyMode !== "undefined") ? buyMode : 1;
+        const bmArg = bm === "max" ? "'max'" : bm;
+        const bmLabel = bm === "max" ? "MAX" : ("x" + bm);
+        html += '<button class="up-card ' + (locked ? "locked" : "") + '" onclick="buyBuilding(\'' + b.id + '\',' + bmArg + ')">' +
+            '<span class="up-ico">' + b.icon + '</span><div class="up-mid"><div class="up-name">' + b.name + ' <span class="buy-badge">' + bmLabel + '</span></div>' +
             '<div class="up-stat">+' + b.baseProd + '/s each · own ' + owned + '</div>' +
             '<div class="up-cost">' + (locked ? "🔒 World " + (WORLDS[b.reqWorld]?.name || b.reqWorld) : fmt(cost) + " 💨") + '</div></div></button>';
     });
@@ -552,7 +555,12 @@ function rollQuests() {
     const wk = weekKey();
     if (m.quests.lastWeekly !== wk) {
         m.quests.lastWeekly = wk;
-        m.quests.weekly = [{ id: "mega", label: "Ascend or 20 hatches", need: 20, progress: 0, done: false, reward: { tokens: 10, chips: 20 } }];
+        m.quests.weekly = [{
+            id: "mega", label: "Hatch 20 eggs this week", stat: "weeklyHatches", need: 20,
+            progress: 0, done: false,
+            startHatches: m.stats.totalHatches || 0, startAsc: m.stats.totalAscensions || 0,
+            reward: { tokens: 10, chips: 20 }
+        }];
     }
     if (!m.quests.session) m.quests.session = {};
 }
@@ -567,6 +575,15 @@ function checkQuestProgress() {
         if (q.done) return;
         q.progress = s[q.stat] || 0;
         if (q.progress >= q.need) completeQuest(q);
+    });
+    (m.quests.weekly || []).forEach(q => {
+        if (q.done) return;
+        if (q.id === "mega") {
+            const hatchProg = (m.stats.totalHatches || 0) - (q.startHatches || 0);
+            const ascProg = (m.stats.totalAscensions || 0) > (q.startAsc || 0);
+            q.progress = ascProg ? q.need : Math.min(q.need, hatchProg);
+            if (q.progress >= q.need) completeQuest(q);
+        }
     });
 }
 
@@ -591,7 +608,8 @@ function renderQuests() {
             '<div class="quest-prog">' + Math.min(q.progress || 0, q.need) + '/' + q.need + '</div></div>';
     });
     (m.quests.weekly || []).forEach(q => {
-        html += '<div class="quest-card weekly"><div>📅 ' + q.label + '</div></div>';
+        html += '<div class="quest-card weekly ' + (q.done ? "done" : "") + '"><div>📅 ' + q.label + '</div>' +
+            '<div class="quest-prog">' + Math.min(q.progress || 0, q.need) + '/' + q.need + '</div></div>';
     });
     el.innerHTML = html;
 }
@@ -708,6 +726,7 @@ function onToiletClick() {
 function maybeStartInvasion() {
     const m = ensureMeta();
     if (m.invasion && m.invasion.ends > Date.now()) return;
+    if (m.invasionEnded && Date.now() - m.invasionEnded < 300000) return;
     if (Math.random() > 0.0008) return;
     const maxHp = 5000 + brainrotLevel() * 200;
     m.invasion = { hp: maxHp, max: maxHp, ends: Date.now() + 120000, dps: 0 };
@@ -718,13 +737,17 @@ function maybeStartInvasion() {
 function invasionClick(dmg) {
     const m = ensureMeta();
     if (!m.invasion || m.invasion.ends < Date.now()) return;
-    m.invasion.hp -= dmg || getClickPower() * getPetMult();
+    const hit = dmg || getClickPower() * getPetMult();
+    m.invasion.hp -= hit;
+    m.invasion.clicks = (m.invasion.clicks || 0) + 1;
     if (m.invasion.hp <= 0) {
-        const reward = getClickPower() * getPetMult() * 800;
+        const clickBonus = 1 + Math.min(2, (m.invasion.clicks || 0) / 500);
+        const reward = Math.floor(getClickPower() * getPetMult() * 800 * clickBonus);
         game.points += reward;
         grantChips(5 + brainrotLevel(), "invasion");
         trackStat("invasionWins", 1);
         m.invasion = null;
+        m.invasionEnded = Date.now();
         showToast("🛡️ Invasion repelled! +" + fmt(reward), 3000);
         checkAchievements();
     }
@@ -742,7 +765,7 @@ function renderInvasionHud() {
     }
     hud.classList.remove("hidden");
     const pct = Math.max(0, (inv.hp / inv.max) * 100);
-    hud.innerHTML = '<div class="inv-hud-label">🚨 SKIBIDI WAVE</div><div class="inv-bar"><div class="inv-fill" style="width:' + pct + '%"></div></div>';
+    hud.innerHTML = '<div class="inv-hud-label">🚨 SKIBIDI WAVE · Server HP</div><div class="inv-bar"><div class="inv-fill" style="width:' + pct + '%"></div></div>';
 }
 
 function renderInvasion() {
@@ -758,6 +781,14 @@ function renderInvasion() {
 }
 
 // ---------- MEME OF THE WEEK ----------
+function memeWeekDaysLeft() {
+    const now = Date.now();
+    const weekMs = 7 * 24 * 3600 * 1000;
+    const weekStart = Math.floor(now / weekMs) * weekMs;
+    const left = weekMs - (now - weekStart);
+    return Math.max(0, Math.ceil(left / (24 * 3600 * 1000)));
+}
+
 function currentMemePet() {
     const m = ensureMeta();
     const week = Math.floor(Date.now() / (7 * 24 * 3600 * 1000));
@@ -789,20 +820,44 @@ function renderStats() {
     el.innerHTML = html;
 }
 
+function achCategory(a) {
+    if (/^click/.test(a.id)) return "click";
+    if (/^(hatch|leg_|sec_|fuse_|dex_)/.test(a.id)) return "hatch";
+    if (/^(mine|wheel|gamble|chipper)/.test(a.id)) return "casino";
+    return "meta";
+}
+function isSecretAch(a) {
+    return /^(konami|hidden|toilet|bankrupt)/.test(a.id);
+}
+let achFilter = "all";
+function setAchFilter(cat, btn) {
+    achFilter = cat;
+    document.querySelectorAll(".ach-filter").forEach(b => b.classList.remove("active"));
+    if (btn) btn.classList.add("active");
+    renderAchievements();
+}
+
 function renderAchievements() {
     const el = document.getElementById("hub-achievements");
     if (!el) return;
     initAchievementList();
     const m = ensureMeta();
     const lvl = brainrotLevel();
-    let html = '<div class="brainrot-bar-wrap"><div class="brainrot-label">🧠 ' + brainrotTitle() + ' · Lv ' + lvl + '</div>' +
+    let html = '<div class="brainrot-bar-wrap' + (lvl > 0 && lvl % 10 === 0 ? " milestone" : "") + '"><div class="brainrot-label">🧠 ' + brainrotTitle() + ' · Lv ' + lvl + '</div>' +
         '<div class="brainrot-bar"><div class="brainrot-fill" style="width:' + Math.min(100, lvl) + '%"></div></div>' +
-        '<div class="brainrot-bonus">+' + (lvl * 0.5).toFixed(1) + '% global Stink</div></div>';
+        '<div class="brainrot-bonus">+' + (lvl * 0.5).toFixed(1) + '% global Stink' +
+        (lvl > 0 && lvl % 10 === 0 ? " · 🎖️ Milestone border unlocked!" : "") + '</div></div>';
+    html += '<div class="ach-filters">' +
+        ['all','click','hatch','casino','meta'].map(c =>
+            '<button class="ach-filter' + (achFilter === c ? ' active' : '') + '" onclick="setAchFilter(\'' + c + '\', this)">' + c + '</button>'
+        ).join("") + '</div>';
     html += '<div class="ach-list">';
     ACHIEVEMENTS.forEach(a => {
+        if (achFilter !== "all" && achCategory(a) !== achFilter) return;
         const got = !!m.achievements[a.id];
-        html += '<div class="ach-row ' + (got ? "got" : "") + '"><span>' + (got ? "🏆" : "🔒") + '</span> ' +
-            '<span class="ach-name">' + a.name + '</span><span class="ach-desc">' + a.desc + '</span></div>';
+        const secret = isSecretAch(a) && !got;
+        html += '<div class="ach-row ' + (got ? "got" : "") + (secret ? " secret" : "") + '"><span>' + (got ? "🏆" : (secret ? "❓" : "🔒")) + '</span> ' +
+            '<span class="ach-name">' + (secret ? "???" : a.name) + '</span><span class="ach-desc">' + (secret ? "Secret achievement" : a.desc) + '</span></div>';
     });
     html += '</div>';
     el.innerHTML = html;
@@ -905,6 +960,7 @@ function saveSlotExport(slot) {
     localStorage.setItem("fartSlot_" + slot, m.saveSlots[slot]);
     showToast("💾 Saved to slot " + slot, 2000);
     saveGame();
+    if (typeof renderSaveSlotsUI === "function") renderSaveSlotsUI();
 }
 
 function saveSlotLoad(slot) {
