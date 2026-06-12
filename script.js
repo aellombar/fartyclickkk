@@ -40,7 +40,7 @@ let buyMode = 1; // 1, 10, 100, or "max"
 
 const domCache = Object.create(null);
 const textCache = Object.create(null);
-const FX_NODE_LIMIT = 180;
+const FX_NODE_LIMIT = 260;
 let fxNodeCount = 0;
 
 function byId(id) {
@@ -1635,6 +1635,15 @@ function buildHatchFX(overlay, color, tier, emoji) {
     halo.className = "hfx-halo";
     layer.appendChild(halo);
 
+    const lens = document.createElement("div");
+    lens.className = "hfx-lens";
+    layer.appendChild(lens);
+
+    const core = document.createElement("div");
+    core.className = "hfx-core";
+    core.textContent = emoji;
+    layer.appendChild(core);
+
     const tunnel = document.createElement("div");
     tunnel.className = "hfx-tunnel";
     layer.appendChild(tunnel);
@@ -1665,6 +1674,14 @@ function buildHatchFX(overlay, color, tier, emoji) {
         layer.appendChild(ring);
     }
 
+    for (let i = 0; i < 4 + tier; i++) {
+        const band = document.createElement("div");
+        band.className = "hfx-band";
+        band.style.setProperty("--tilt", (-26 + i * 13) + "deg");
+        band.style.animationDelay = (-i * 0.28) + "s";
+        layer.appendChild(band);
+    }
+
     const shardCount = 22 + tier * 8;
     for (let i = 0; i < shardCount; i++) {
         const shard = document.createElement("i");
@@ -1675,6 +1692,18 @@ function buildHatchFX(overlay, color, tier, emoji) {
         shard.style.setProperty("--delay", (Math.random() * -2.4) + "s");
         shard.style.setProperty("--len", (22 + Math.random() * (44 + tier * 8)) + "px");
         layer.appendChild(shard);
+    }
+
+    const glyphs = ["✦", "◆", "◇", "✧", "✹", "✺", "⬡", emoji];
+    for (let i = 0; i < 16 + tier * 5; i++) {
+        const glyph = document.createElement("span");
+        glyph.className = "hfx-glyph";
+        glyph.textContent = glyphs[i % glyphs.length];
+        glyph.style.left = (8 + Math.random() * 84) + "%";
+        glyph.style.top = (10 + Math.random() * 78) + "%";
+        glyph.style.fontSize = (0.8 + Math.random() * (0.8 + tier * 0.14)) + "rem";
+        glyph.style.animationDelay = (Math.random() * -2.8) + "s";
+        layer.appendChild(glyph);
     }
 
     const scan = document.createElement("div");
@@ -1689,6 +1718,23 @@ function hatchBurstFX(color, tier, emoji) {
     const layer = document.body;
     const cx = window.innerWidth / 2;
     const cy = window.innerHeight * 0.42;
+    const flare = document.createElement("div");
+    flare.className = "hatch-flare";
+    flare.style.left = cx + "px";
+    flare.style.top = cy + "px";
+    flare.style.background = "radial-gradient(circle, #fff 0%, " + color + " 34%, transparent 70%)";
+    appendFxNode(layer, flare, 900, true);
+
+    for (let i = 0; i < 4 + tier; i++) {
+        const ring = document.createElement("div");
+        ring.className = "hatch-screen-ring";
+        ring.style.left = cx + "px";
+        ring.style.top = cy + "px";
+        ring.style.borderColor = i % 2 ? "#fff" : color;
+        ring.style.animationDelay = (i * 0.08) + "s";
+        appendFxNode(layer, ring, 1000, true);
+    }
+
     const count = 14 + tier * 7;
     for (let i = 0; i < count; i++) {
         const ray = document.createElement("div");
@@ -1714,6 +1760,15 @@ function hatchBurstFX(color, tier, emoji) {
         sigil.style.fontSize = (1 + Math.random() * (1.1 + tier * 0.18)) + "rem";
         sigil.style.animationDelay = (Math.random() * 0.18) + "s";
         appendFxNode(layer, sigil, 1250, true);
+    }
+    for (let i = 0; i < 20 + tier * 10; i++) {
+        const star = document.createElement("div");
+        star.className = "hatch-star";
+        star.style.left = (Math.random() * 100) + "vw";
+        star.style.top = (Math.random() * 100) + "vh";
+        star.style.background = i % 3 ? color : "#fff";
+        star.style.animationDelay = (Math.random() * 0.22) + "s";
+        appendFxNode(layer, star, 1100, true);
     }
 }
 
@@ -2059,6 +2114,26 @@ function clickPuff(x, y) {
         s.style.setProperty("--dy", Math.sin(ang)*dist + "px");
         appendFxNode(layer, s, 600);
     }
+    const streaks = Math.min(2 + Math.floor(comboValue / 35), Math.max(0, FX_NODE_LIMIT - fxNodeCount));
+    for (let i = 0; i < streaks; i++) {
+        const line = document.createElement("div");
+        line.className = "click-streak";
+        line.style.left = x + "px"; line.style.top = y + "px";
+        line.style.color = i % 2 ? wColor : "#fff";
+        line.style.background = "linear-gradient(90deg, transparent, " + (i % 2 ? wColor : "#fff") + ", transparent)";
+        const ang = Math.random() * Math.PI * 2;
+        const dist = 90 + Math.random() * 160;
+        line.style.setProperty("--dx", Math.cos(ang) * dist + "px");
+        line.style.setProperty("--dy", Math.sin(ang) * dist + "px");
+        line.style.setProperty("--rot", (ang * 180 / Math.PI) + "deg");
+        appendFxNode(layer, line, 520);
+    }
+    const glint = document.createElement("div");
+    glint.className = "click-glint";
+    glint.style.left = x + "px"; glint.style.top = y + "px";
+    glint.style.color = wColor;
+    glint.style.borderColor = wColor;
+    appendFxNode(layer, glint, 520);
 }
 
 // ambient floating particles around the button
@@ -2419,6 +2494,21 @@ function spawnAmbSpark() {
     appendFxNode(document.body, el, 2600);
 }
 
+function spawnAmbRune() {
+    if (document.hidden || !game.settings.particles || fxNodeCount >= FX_NODE_LIMIT) return;
+    const colors = getWorldColors();
+    const el = document.createElement("div");
+    el.className = "amb-rune";
+    const runes = ["✦", "◆", "◇", "✧", "⬡", "✺", "✹"];
+    el.textContent = runes[Math.floor(Math.random() * runes.length)];
+    el.style.left = (6 + Math.random() * 88) + "vw";
+    el.style.top = (12 + Math.random() * 72) + "vh";
+    el.style.color = colors[Math.floor(Math.random() * colors.length)];
+    el.style.fontSize = (1 + Math.random() * 1.4) + "rem";
+    el.style.animationDuration = (3.5 + Math.random() * 3) + "s";
+    appendFxNode(document.body, el, 6800);
+}
+
 let ambientEffectsStarted = false;
 function startAmbientEffects() {
     if (ambientEffectsStarted) return;
@@ -2431,9 +2521,12 @@ function startAmbientEffects() {
     setInterval(spawnAmbRing, 1500);
     // sparks every 400ms
     setInterval(spawnAmbSpark, 400);
+    // floating neon glyphs
+    setInterval(spawnAmbRune, 1800);
     // spawn a few immediately
     for (let i = 0; i < 3; i++) setTimeout(spawnAmbOrb, i * 600);
     for (let i = 0; i < 4; i++) setTimeout(spawnAmbSpark, i * 200);
+    for (let i = 0; i < 3; i++) setTimeout(spawnAmbRune, i * 450);
 }
 
 // inject decorative orbiting emojis inside the main button
