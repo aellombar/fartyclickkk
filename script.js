@@ -32,7 +32,7 @@ let game = freshGameState();
 
 // runtime (not saved)
 let spamMultiplier = 1, clickStreak = 0, lastClickTime = 0, criticalMultiplier = 1;
-let comboValue = 0, comboDecayTimer = null;
+let comboValue = 0;
 let upgradesRendered = false, audioStarted = false, hatchActive = false;
 let audioCtx = null, pendingHatch = null;
 let petTabCur = "collection", indexWorld = 0;
@@ -40,8 +40,15 @@ let buyMode = 1; // 1, 10, 100, or "max"
 
 const domCache = Object.create(null);
 const textCache = Object.create(null);
-const FX_NODE_LIMIT = 260;
+const FX_NODE_LIMIT = 72;
+const FX_SOFT_LIMIT = 48;
 let fxNodeCount = 0;
+let displayPending = false;
+let comboRaf = null;
+let comboLastTs = 0;
+let lastMainClickAt = 0;
+let lastUpgradeRender = 0;
+let pageVisible = typeof document !== "undefined" ? !document.hidden : true;
 
 function byId(id) {
     const cached = domCache[id];
@@ -49,6 +56,30 @@ function byId(id) {
     const node = document.getElementById(id);
     if (node) domCache[id] = node;
     return node;
+}
+
+function fxBudget() { return Math.max(0, FX_NODE_LIMIT - fxNodeCount); }
+function fxScale() {
+    if (fxNodeCount >= FX_SOFT_LIMIT) return 0.3;
+    if (fxNodeCount >= FX_SOFT_LIMIT * 0.65) return 0.55;
+    return 1;
+}
+
+function scheduleDisplayUpdate() {
+    if (displayPending) return;
+    displayPending = true;
+    requestAnimationFrame(() => {
+        displayPending = false;
+        updateDisplay();
+    });
+}
+
+function maybeRefreshUpgradeTabs(force) {
+    if (!upgradesRendered || !sheetOpen("upgrades")) return;
+    const now = Date.now();
+    if (!force && now - lastUpgradeRender < 2500) return;
+    lastUpgradeRender = now;
+    renderUpgradeTabs();
 }
 
 function appendFxNode(parent, node, ttl, important) {
@@ -61,6 +92,15 @@ function appendFxNode(parent, node, ttl, important) {
         fxNodeCount = Math.max(0, fxNodeCount - 1);
     }, ttl);
     return true;
+}
+
+function spawnFxEmoji(parent, emoji, cls, x, y, ttl, important) {
+    const p = document.createElement("div");
+    p.className = "fx-emoji" + (cls ? " " + cls : "");
+    p.textContent = emoji;
+    if (x != null) p.style.left = x + "px";
+    if (y != null) p.style.top = y + "px";
+    return appendFxNode(parent, p, ttl, important);
 }
 
 
@@ -1036,7 +1076,7 @@ function saveGame(force) {
     saveTimer = setTimeout(() => {
         saveTimer = null;
         writeSaveNow();
-    }, 650);
+    }, 2000);
 }
 function loadGame() {
     try {
@@ -1080,8 +1120,10 @@ function claimOffline() {
 //  MAIN CLICK + COMBO
 // ============================================================
 function handleMainClick(e) {
-    startAudio();
     const now = Date.now();
+    if (now - lastMainClickAt < 70) return;
+    lastMainClickAt = now;
+    startAudio();
     const dt = now - lastClickTime;
     const comboGain = 7 * auraMult("combo");
     if (dt < 400 && dt >= 0) { clickStreak++; comboValue = Math.min(comboValue + comboGain, 100); }
@@ -1103,39 +1145,43 @@ function handleMainClick(e) {
     const wColor = (w && w.theme) ? w.theme.p : "#7FFF00";
     const textColor = criticalMultiplier > 1 ? "#FFD54A" : (comboValue > 60 ? "#00E0FF" : wColor);
     floatText(e.clientX, e.clientY, "+" + fmt(dmg), textColor, criticalMultiplier > 1);
-    // rings scale with combo
-    if (comboValue > 30) ringAt(e.clientX, e.clientY, wColor);
-    if (comboValue > 60) ringAt(e.clientX, e.clientY, comboValue > 80 ? "#FF3D9A" : "#00E0FF");
-    if (comboValue > 90) ringAt(e.clientX, e.clientY, "#FFD54A");
+    if (comboValue > 40 && fxBudget() > 4) {
+        ringAt(e.clientX, e.clientY, comboValue > 75 ? "#FF3D9A" : wColor);
+    }
     clickPuff(e.clientX, e.clientY);
-    // extra world-colored puffs at high combo
-    if (comboValue > 50 && Math.random() < 0.5) burstAt(e.clientX, e.clientY, wColor, 6);
-    if (comboValue > 80 && Math.random() < 0.4) burstAt(e.clientX, e.clientY, "#FF3D9A", 8);
+    if (comboValue > 70 && Math.random() < 0.25 && fxBudget() > 6) {
+        burstAt(e.clientX, e.clientY, wColor, 4);
+    }
     // milestone combo flash
     if (comboValue >= 100 && Math.random() < 0.08) screenFlash(wColor);
     popButton();
     maybeBrainrotPop();
     refreshCombo();
-    updateDisplay();
-    if (upgradesRendered && sheetOpen("upgrades")) renderUpgradeTabs();
+    scheduleDisplayUpdate();
+    maybeRefreshUpgradeTabs();
     saveGame();
 }
-function refreshCombo() {
-    const bar = document.getElementById("combo-bar"), label = document.getElementById("combo-label");
-    if (bar) { bar.style.width = comboValue + "%"; }
-    if (label) label.innerText = "COMBO x" + spamMultiplier.toFixed(1);
-    const mb = document.getElementById("main-btn");
+function syncComboUI() {
+    const bar = byId("combo-bar"), label = byId("combo-label"), mb = byId("main-btn");
+    if (bar) bar.style.width = comboValue + "%";
+    if (label) label.textContent = "COMBO x" + spamMultiplier.toFixed(1);
     if (mb) mb.classList.toggle("on-fire", comboValue > 75);
-    const decayRate = 4 / auraMult("combo");
-    if (comboDecayTimer) clearInterval(comboDecayTimer);
-    comboDecayTimer = setInterval(() => {
-        comboValue = Math.max(0, comboValue - decayRate);
+}
+function refreshCombo() {
+    syncComboUI();
+    if (comboRaf || comboValue <= 0) return;
+    comboLastTs = performance.now();
+    const tick = (ts) => {
+        const dt = Math.min(0.05, (ts - comboLastTs) / 1000);
+        comboLastTs = ts;
+        const decayRate = 4 / auraMult("combo");
+        comboValue = Math.max(0, comboValue - decayRate * dt * 5);
         spamMultiplier = 1 + (comboValue / 100) * 2.5;
-        if (bar) bar.style.width = comboValue + "%";
-        if (label) label.innerText = "COMBO x" + spamMultiplier.toFixed(1);
-        if (mb) mb.classList.toggle("on-fire", comboValue > 75);
-        if (comboValue <= 0) { clearInterval(comboDecayTimer); comboDecayTimer = null; }
-    }, 200);
+        syncComboUI();
+        if (comboValue > 0) comboRaf = requestAnimationFrame(tick);
+        else comboRaf = null;
+    };
+    comboRaf = requestAnimationFrame(tick);
 }
 const BRAINROT_POPS = ["SKIBIDI! 🚽","RIZZ +∞ 😎","GYATT! 🍑","ONLY IN OHIO 🌽","SHEEESH 🗣️","SIGMA GRINDSET 🗿","FANUM TAX 🍔","W RIZZ 🔥","MEWING 😐","GET REAL 💀","NO CAP 🧢","BUSSIN 🤤","it's giving 💅","CAUGHT IN 4K 📸"];
 function maybeBrainrotPop() {
@@ -1240,7 +1286,7 @@ function openSheet(name) {
     closeSheet();
     const sheet = document.getElementById("sheet-" + name), overlay = document.getElementById("sheet-overlay");
     if (!sheet || !overlay) return;
-    if (name === "upgrades") renderUpgradeTabs();
+    if (name === "upgrades") maybeRefreshUpgradeTabs(true);
     if (name === "pets") renderPetSheet();
     if (name === "worlds") renderWorlds();
     if (name === "aura") renderAura();
@@ -2134,58 +2180,48 @@ function fxLayer() { return byId("golden-layer"); }
 // little fart-cloud puffs + sparks on every click
 const PUFFS = ["💨","💨","💨","✨","⭐","💫","🌟","💥","🔥","⚡"];
 function clickPuff(x, y) {
-    if (!game.settings.particles) return;
+    if (!game.settings.particles || !pageVisible) return;
     const layer = fxLayer(); if (!layer) return;
-    if (fxNodeCount >= FX_NODE_LIMIT) return;
+    const budget = fxBudget();
+    if (budget < 2) return;
     const w = WORLDS[game.worldIdx || 0];
     const wColor = (w && w.theme) ? w.theme.p : "#7FFF00";
-    // more puffs at higher combo
-    const budget = Math.max(0, FX_NODE_LIMIT - fxNodeCount);
-    const n = Math.min(3 + Math.floor(comboValue / 20) + Math.floor(Math.random()*3), budget);
+    const scale = fxScale();
+    const n = Math.min(Math.max(1, Math.floor((1 + comboValue / 35) * scale)), budget);
     for (let i = 0; i < n; i++) {
         const p = document.createElement("div");
-        p.className = "click-puff";
-        setIconNode(p, PUFFS[Math.floor(Math.random()*PUFFS.length)], "fx-icon-img", "click puff");
+        p.className = "click-puff fx-emoji";
+        p.textContent = PUFFS[Math.floor(Math.random() * PUFFS.length)];
         p.style.left = x + "px"; p.style.top = y + "px";
-        const ang = -Math.PI/2 + (Math.random()-0.5)*2.2, dist = 35 + Math.random()*80;
-        p.style.setProperty("--dx", Math.cos(ang)*dist + "px");
-        p.style.setProperty("--dy", (Math.sin(ang)*dist) + "px");
-        p.style.fontSize = (0.7 + Math.random()*1.1) + "rem";
-        appendFxNode(layer, p, 700);
+        const ang = -Math.PI / 2 + (Math.random() - 0.5) * 1.8, dist = 30 + Math.random() * 60;
+        p.style.setProperty("--dx", Math.cos(ang) * dist + "px");
+        p.style.setProperty("--dy", Math.sin(ang) * dist + "px");
+        p.style.fontSize = (0.65 + Math.random() * 0.55) + "rem";
+        appendFxNode(layer, p, 650);
     }
-    // spark dots in world color
-    const sparks = Math.min(4 + Math.floor(comboValue / 15), Math.max(0, FX_NODE_LIMIT - fxNodeCount));
+    const sparks = Math.min(Math.floor((1 + comboValue / 40) * scale), budget - n);
     for (let i = 0; i < sparks; i++) {
         const s = document.createElement("div"); s.className = "confetti";
         s.style.left = x + "px"; s.style.top = y + "px";
-        s.style.width = s.style.height = (3 + Math.random()*4) + "px";
+        s.style.width = s.style.height = (3 + Math.random() * 3) + "px";
         s.style.borderRadius = "50%";
         s.style.background = Math.random() < 0.6 ? wColor : "#ffffff";
-        const ang = Math.random()*Math.PI*2, dist = 20 + Math.random()*70;
-        s.style.setProperty("--dx", Math.cos(ang)*dist + "px");
-        s.style.setProperty("--dy", Math.sin(ang)*dist + "px");
-        appendFxNode(layer, s, 600);
+        const ang = Math.random() * Math.PI * 2, dist = 18 + Math.random() * 50;
+        s.style.setProperty("--dx", Math.cos(ang) * dist + "px");
+        s.style.setProperty("--dy", Math.sin(ang) * dist + "px");
+        appendFxNode(layer, s, 550);
     }
-    const streaks = Math.min(2 + Math.floor(comboValue / 35), Math.max(0, FX_NODE_LIMIT - fxNodeCount));
-    for (let i = 0; i < streaks; i++) {
+    if (comboValue > 55 && scale > 0.45 && fxBudget() > 0) {
         const line = document.createElement("div");
         line.className = "click-streak";
         line.style.left = x + "px"; line.style.top = y + "px";
-        line.style.color = i % 2 ? wColor : "#fff";
-        line.style.background = "linear-gradient(90deg, transparent, " + (i % 2 ? wColor : "#fff") + ", transparent)";
-        const ang = Math.random() * Math.PI * 2;
-        const dist = 90 + Math.random() * 160;
+        line.style.background = "linear-gradient(90deg, transparent, " + wColor + ", transparent)";
+        const ang = Math.random() * Math.PI * 2, dist = 70 + Math.random() * 90;
         line.style.setProperty("--dx", Math.cos(ang) * dist + "px");
         line.style.setProperty("--dy", Math.sin(ang) * dist + "px");
         line.style.setProperty("--rot", (ang * 180 / Math.PI) + "deg");
-        appendFxNode(layer, line, 520);
+        appendFxNode(layer, line, 480);
     }
-    const glint = document.createElement("div");
-    glint.className = "click-glint";
-    glint.style.left = x + "px"; glint.style.top = y + "px";
-    glint.style.color = wColor;
-    glint.style.borderColor = wColor;
-    appendFxNode(layer, glint, 520);
 }
 
 // ambient floating particles around the button
@@ -2193,28 +2229,25 @@ let ambientTimer = null;
 function startAmbientParticles() {
     if (ambientTimer) return;
     ambientTimer = setInterval(() => {
-        if (document.hidden || !game.settings.particles) return;
+        if (!pageVisible || !game.settings.particles || fxNodeCount >= FX_SOFT_LIMIT) return;
         const layer = fxLayer(); if (!layer) return;
-        if (fxNodeCount >= FX_NODE_LIMIT) return;
-        const w = WORLDS[game.worldIdx || 0];
-        const wColor = (w && w.theme) ? w.theme.p : "#7FFF00";
         const btn = byId("main-btn"); if (!btn) return;
         const rect = btn.getBoundingClientRect();
-        const cx = rect.left + rect.width/2, cy = rect.top + rect.height/2;
+        const cx = rect.left + rect.width / 2, cy = rect.top + rect.height / 2;
         const angle = Math.random() * Math.PI * 2;
-        const r = rect.width/2 + 10 + Math.random()*20;
-        const sx = cx + Math.cos(angle)*r, sy = cy + Math.sin(angle)*r;
-        const p = document.createElement("div"); p.className = "click-puff";
-        const emojis = ["✨","💫","⭐","🌟","💨"];
-        setIconNode(p, emojis[Math.floor(Math.random()*emojis.length)], "fx-icon-img", "ambient puff");
+        const r = rect.width / 2 + 10 + Math.random() * 16;
+        const sx = cx + Math.cos(angle) * r, sy = cy + Math.sin(angle) * r;
+        const p = document.createElement("div");
+        p.className = "click-puff fx-emoji";
+        const emojis = ["✨", "💫", "⭐", "🌟", "💨"];
+        p.textContent = emojis[Math.floor(Math.random() * emojis.length)];
         p.style.left = sx + "px"; p.style.top = sy + "px";
-        p.style.fontSize = (0.5 + Math.random()*0.7) + "rem";
-        p.style.opacity = "0.7";
-        const drift = -30 - Math.random()*40;
-        p.style.setProperty("--dx", (Math.random()*20-10) + "px");
-        p.style.setProperty("--dy", drift + "px");
-        appendFxNode(layer, p, 900);
-    }, 300);
+        p.style.fontSize = (0.45 + Math.random() * 0.45) + "rem";
+        p.style.opacity = "0.65";
+        p.style.setProperty("--dx", (Math.random() * 16 - 8) + "px");
+        p.style.setProperty("--dy", (-24 - Math.random() * 30) + "px");
+        appendFxNode(layer, p, 850);
+    }, 1400);
 }
 
 function floatText(x, y, txt, color, big) {
@@ -2244,7 +2277,8 @@ function shake() {
 function spawnConfetti(color, count) {
     if (!game.settings.particles) return; const layer = fxLayer(); if (!layer) return;
     const colors = [color, "#fff", "#FFD54A", "#00E0FF", "#FF3D9A"];
-    for (let i=0;i<count;i++) {
+    const max = Math.min(count, fxBudget(), 28);
+    for (let i = 0; i < max; i++) {
         if (fxNodeCount >= FX_NODE_LIMIT) break;
         const p = document.createElement("div"); p.className = "confetti";
         p.style.left="50%"; p.style.top="44%"; p.style.background = colors[i%colors.length];
@@ -2256,7 +2290,8 @@ function spawnConfetti(color, count) {
 }
 function burstAt(x, y, color, count) {
     if (!game.settings.particles) return; const layer = fxLayer(); if (!layer) return;
-    for (let i=0;i<count;i++) {
+    const max = Math.min(count, fxBudget(), 16);
+    for (let i = 0; i < max; i++) {
         if (fxNodeCount >= FX_NODE_LIMIT) break;
         const p = document.createElement("div"); p.className = "confetti";
         p.style.left = x+"px"; p.style.top = y+"px"; p.style.background = Math.random()<0.5?color:"#fff";
@@ -2267,10 +2302,11 @@ function burstAt(x, y, color, count) {
     }
 }
 function ringAt(x, y, color) {
+    if (!game.settings.particles || fxBudget() < 2) return;
     const layer = fxLayer(); if (!layer) return;
     const r = document.createElement("div"); r.className = "fx-ring";
-    r.style.left = x+"px"; r.style.top = y+"px"; r.style.borderColor = color;
-    appendFxNode(layer, r, 600, true);
+    r.style.left = x + "px"; r.style.top = y + "px"; r.style.borderColor = color;
+    appendFxNode(layer, r, 550);
 }
 
 
@@ -2295,14 +2331,15 @@ function sparkleRise(color) {
 }
 function emojiRain(emojis, count) {
     if (!game.settings.particles) return; const layer = fxLayer(); if (!layer) return;
-    for (let i=0;i<count;i++) {
-        if (fxNodeCount >= FX_NODE_LIMIT) break;
-        const e = document.createElement("div"); e.className = "emoji-rain";
-        setIconNode(e, emojis[i % emojis.length], "rain-icon-img", "emoji rain");
-        e.style.left = Math.random()*100 + "%";
-        e.style.animationDelay = (Math.random()*0.6) + "s";
-        e.style.fontSize = (1.2 + Math.random()*1.4) + "rem";
-        appendFxNode(layer, e, 2200);
+    const max = Math.min(count, fxBudget(), 24);
+    for (let i = 0; i < max; i++) {
+        const e = document.createElement("div");
+        e.className = "emoji-rain fx-emoji";
+        e.textContent = emojis[i % emojis.length];
+        e.style.left = Math.random() * 100 + "%";
+        e.style.animationDelay = (Math.random() * 0.6) + "s";
+        e.style.fontSize = (1 + Math.random() * 0.8) + "rem";
+        appendFxNode(layer, e, 2000);
     }
 }
 function bigBanner(text, color) {
@@ -2401,21 +2438,28 @@ function updateDisplay() {
 }
 function createParticles() {
     const overlay = document.getElementById("particle-overlay"); if (!overlay) return; overlay.innerHTML = "";
-    for (let i=0;i<16;i++) {
+    for (let i = 0; i < 8; i++) {
         const p = document.createElement("div"); p.className = "particle";
-        p.style.left = Math.random()*100 + "%"; p.style.animationDuration = (10+Math.random()*14)+"s"; p.style.animationDelay = (Math.random()*8)+"s";
+        p.style.left = Math.random() * 100 + "%"; p.style.animationDuration = (12 + Math.random() * 12) + "s"; p.style.animationDelay = (Math.random() * 8) + "s";
         overlay.appendChild(p);
     }
 }
 // passive tick
 setInterval(() => {
     const inc = getPassive() * getPetMult();
-    if (!isNaN(inc) && inc > 0) { game.points += inc; updateDisplay(); if (upgradesRendered && sheetOpen("upgrades")) renderUpgradeTabs(); }
+    if (!isNaN(inc) && inc > 0) {
+        game.points += inc;
+        scheduleDisplayUpdate();
+        maybeRefreshUpgradeTabs();
+    }
 }, 1000);
 setInterval(() => saveGame(true), 5000);
 
 function initGame() {
     loadGame();
+    if (typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches) {
+        game.settings.particles = false;
+    }
     hatchActive = false;
     hatchMultiSession = false;
     hatchQueue = [];
@@ -2480,7 +2524,7 @@ function updateCornerGlows() {
 
 // Floating orbs that drift slowly across the screen
 function spawnAmbOrb() {
-    if (document.hidden || !game.settings.particles || fxNodeCount >= FX_NODE_LIMIT) return;
+    if (!pageVisible || !game.settings.particles || fxNodeCount >= FX_SOFT_LIMIT) return;
     const colors = getWorldColors();
     const el = document.createElement("div");
     el.className = "amb-orb";
@@ -2500,7 +2544,7 @@ function spawnAmbOrb() {
 
 // Shooting streaks flying across the screen
 function spawnAmbStreak() {
-    if (document.hidden || !game.settings.particles || fxNodeCount >= FX_NODE_LIMIT) return;
+    if (!pageVisible || !game.settings.particles || fxNodeCount >= FX_SOFT_LIMIT) return;
     const colors = getWorldColors();
     const el = document.createElement("div");
     el.className = "amb-streak";
@@ -2518,7 +2562,7 @@ function spawnAmbStreak() {
 
 // Pulsing rings that expand from random spots
 function spawnAmbRing() {
-    if (document.hidden || !game.settings.particles || fxNodeCount >= FX_NODE_LIMIT) return;
+    if (!pageVisible || !game.settings.particles || fxNodeCount >= FX_SOFT_LIMIT) return;
     const colors = getWorldColors();
     const el = document.createElement("div");
     el.className = "amb-ring";
@@ -2535,7 +2579,7 @@ function spawnAmbRing() {
 
 // Floating sparkle dots
 function spawnAmbSpark() {
-    if (document.hidden || !game.settings.particles || fxNodeCount >= FX_NODE_LIMIT) return;
+    if (!pageVisible || !game.settings.particles || fxNodeCount >= FX_SOFT_LIMIT) return;
     const colors = getWorldColors();
     const el = document.createElement("div");
     el.className = "amb-spark";
@@ -2548,7 +2592,7 @@ function spawnAmbSpark() {
 }
 
 function spawnAmbRune() {
-    if (document.hidden || !game.settings.particles || fxNodeCount >= FX_NODE_LIMIT) return;
+    if (!pageVisible || !game.settings.particles || fxNodeCount >= FX_SOFT_LIMIT) return;
     const colors = getWorldColors();
     const el = document.createElement("div");
     el.className = "amb-rune";
@@ -2566,20 +2610,13 @@ let ambientEffectsStarted = false;
 function startAmbientEffects() {
     if (ambientEffectsStarted) return;
     ambientEffectsStarted = true;
-    // orbs every 2s
-    setInterval(spawnAmbOrb, 2000);
-    // streaks every 3-5s
-    setInterval(spawnAmbStreak, 3500);
-    // rings every 1.5s
-    setInterval(spawnAmbRing, 1500);
-    // sparks every 400ms
-    setInterval(spawnAmbSpark, 400);
-    // floating neon glyphs
-    setInterval(spawnAmbRune, 1800);
-    // spawn a few immediately
-    for (let i = 0; i < 3; i++) setTimeout(spawnAmbOrb, i * 600);
-    for (let i = 0; i < 4; i++) setTimeout(spawnAmbSpark, i * 200);
-    for (let i = 0; i < 3; i++) setTimeout(spawnAmbRune, i * 450);
+    setInterval(spawnAmbOrb, 7000);
+    setInterval(spawnAmbStreak, 11000);
+    setInterval(spawnAmbRing, 6000);
+    setInterval(spawnAmbSpark, 3200);
+    setInterval(spawnAmbRune, 9000);
+    setTimeout(spawnAmbOrb, 800);
+    setTimeout(spawnAmbSpark, 1200);
 }
 
 // inject decorative orbiting emojis inside the main button
@@ -2587,14 +2624,19 @@ function buildButtonDecor() {
     const btn = document.getElementById("main-btn");
     if (!btn || btn.querySelector(".btn-orbit")) return;
     const orbit = document.createElement("div"); orbit.className = "btn-orbit";
-    const orbEmojis = ["💨","✨","💩","🌟","💚","⭐","🔥","💫"];
-    for (let i=0;i<8;i++) {
-        const d = document.createElement("span"); d.className = "orb"; setIconNode(d, orbEmojis[i], "orbit-icon-img", "button orbit");
-        d.style.transform = "rotate(" + (i*45) + "deg) translateY(-160px)";
+    const orbEmojis = ["💨", "✨", "🌟", "⭐"];
+    for (let i = 0; i < orbEmojis.length; i++) {
+        const d = document.createElement("span");
+        d.className = "orb fx-emoji";
+        d.textContent = orbEmojis[i];
+        d.style.transform = "rotate(" + (i * 90) + "deg) translateY(-160px)";
         orbit.appendChild(d);
     }
     btn.appendChild(orbit);
 }
+document.addEventListener("visibilitychange", () => {
+    pageVisible = !document.hidden;
+});
 if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", initGame);
 else initGame();
 
