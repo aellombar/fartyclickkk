@@ -1185,6 +1185,51 @@ body::before {
     100% { opacity: 0; transform: translateY(-70px) scale(1.25) rotate(16deg); }
 }
 
+/* ---- PREMIUM ATLAS (6×4 @ 256px) ---- */
+.premium-icon {
+    display: inline-block;
+    width: 1.35em;
+    height: 1.35em;
+    vertical-align: middle;
+    background-image: url("assets/premium-atlas.png?v=1");
+    background-size: 600% 400%;
+    background-position: calc(var(--px) * 20%) calc(var(--py) * 33.333%);
+    background-repeat: no-repeat;
+    image-rendering: auto;
+}
+.premium-icon.main-icon-img,
+.premium-icon.logo-icon-img {
+    width: 88px;
+    height: 88px;
+    display: block;
+    margin: 0 auto;
+    filter: drop-shadow(0 0 18px rgba(127,255,0,0.45));
+}
+.premium-icon.casino-banner-img {
+    width: 100%;
+    max-width: 280px;
+    height: 72px;
+    display: block;
+    margin: 0 auto 8px;
+    background-size: 600% 400%;
+}
+.premium-icon.casino-stat-ico,
+.premium-icon.casino-shard-ico,
+.premium-icon.crate-item-ico,
+.premium-icon.mine-tile-ico {
+    width: 36px;
+    height: 36px;
+}
+.premium-icon.wheel-premium {
+    width: 100px;
+    height: 100px;
+    display: block;
+    margin: 0 auto;
+    animation: wheelSpin 3.2s cubic-bezier(0.2,0.8,0.3,1) forwards;
+}
+.stat-grid-5 { grid-template-columns: repeat(5, 1fr) !important; }
+.stat-chips .stat-value { color: #ffd54a; }
+
 /* ---- STINK CASINO ---- */
 .casino-hero {
     text-align: center;
@@ -1276,6 +1321,58 @@ body::before {
 .loot-slot.revealed { border-style: solid; border-color: var(--gold); animation: lootPop 0.35s ease; }
 @keyframes lootPop { 0%{transform:scale(0.5);} 70%{transform:scale(1.15);} 100%{transform:scale(1);} }
 .loot-status { text-align: center; font-weight: 700; color: var(--pink); min-height: 2.5em; }
+.scratch-canvas-wrap {
+    border-radius: 14px; overflow: hidden; border: 2px solid var(--gold);
+    margin: 12px auto; width: min(100%, 320px);
+}
+.scratch-canvas-wrap canvas { display: block; width: 100%; height: auto; touch-action: none; }
+.scratch-reveal { margin-top: 10px; font-size: 0.85rem; padding: 10px; }
+.mines-hud { text-align: center; font-weight: 700; margin-bottom: 10px; color: var(--cyan); }
+.mines-grid {
+    display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px;
+    max-width: 280px; margin: 0 auto 12px;
+}
+.mine-tile {
+    aspect-ratio: 1; border-radius: 10px; border: 1px solid var(--stroke);
+    background: rgba(0,0,0,0.45); cursor: pointer; padding: 4px;
+    display: grid; place-items: center; font-size: 1.2rem;
+}
+.mine-tile.safe { border-color: #7fff00; box-shadow: 0 0 10px rgba(127,255,0,0.35); }
+.mine-tile.boom { border-color: #ff3030; animation: lootPop 0.4s ease; }
+.mines-cashout { font-size: 0.85rem; }
+.crate-stage { text-align: center; margin-bottom: 8px; }
+.crate-stage-ico { width: 64px; height: 64px; }
+.crate-viewport {
+    position: relative; overflow: hidden; height: 100px;
+    margin: 12px 0; border-radius: 12px;
+    background: linear-gradient(180deg, rgba(0,0,0,0.5), rgba(40,20,60,0.8));
+    border: 2px solid var(--purple);
+}
+.crate-viewport.ohio { border-color: #ff3d9a; }
+.crate-marker {
+    position: absolute; left: 50%; top: 0; bottom: 0; width: 3px;
+    background: #ffd54a; z-index: 2; transform: translateX(-50%);
+    box-shadow: 0 0 12px #ffd54a;
+}
+.crate-strip {
+    display: flex; gap: 4px; height: 100%; align-items: center;
+    padding-left: 140px; will-change: transform;
+}
+.crate-item {
+    flex: 0 0 84px; height: 84px; border-radius: 10px;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.12);
+    font-size: 0.55rem; text-align: center; color: var(--muted);
+}
+.crate-item.tier-3 { border-color: #ffd54a; }
+.crate-item.tier-4 { border-color: #b14eff; }
+.crate-item.tier-5 { border-color: #00ffd0; box-shadow: 0 0 16px rgba(0,255,208,0.4); }
+.crate-status { text-align: center; font-weight: 700; color: var(--gold); min-height: 2em; }
+.ad-modal-content { text-align: center; }
+.ad-progress { height: 8px; background: rgba(255,255,255,0.1); border-radius: 4px; margin: 16px 0; overflow: hidden; }
+#ad-bar { height: 100%; width: 0; background: linear-gradient(90deg, #7fff00, #00e0ff); transition: width 0.15s; }
+.casino-grid { grid-template-columns: 1fr 1fr; }
+@media (max-width: 380px) { .stat-grid-5 { grid-template-columns: repeat(3, 1fr) !important; } }
 .bottom-nav .nav-btn { flex: 1; min-width: 0; }
 .bottom-nav .nav-txt { font-size: 0.68rem !important; }
 

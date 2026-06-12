@@ -21,6 +21,8 @@ function freshGameState() {
         auraUpgrades: {},
         discovered: {},
         redeemedCodes: {},
+        chips: 0,
+        peakWorldIdx: 0,
         casino: null,
         lastSeen: Date.now(),
         settings: {
@@ -179,17 +181,33 @@ function setIconNode(el, value, cls, label) {
     if (!el) return;
     el.innerHTML = iconOrTextHTML(value, cls, label);
 }
+const PREMIUM_ATLAS = { src: "assets/premium-atlas.png?v=1", cols: 6, rows: 4, cell: 256 };
+const PREMIUM_ICON = {
+    fart: 0, chip: 1, "casino-banner": 2, "scratch-frame": 3, "scratch-foil": 4, "mine-safe": 5,
+    "mine-bomb": 6, wheel: 7, crate: 8, "crate-open": 9, "skibidi-god": 10, shard: 11,
+    "sym-fart": 12, "sym-paw": 13, "sym-crown": 14, "sym-gem": 15,
+    "loot-box": 16, "mines-bg": 17, "golden-buff": 18, "aura-crystal": 19
+};
+function premiumHTML(key, cls, label) {
+    const idx = PREMIUM_ICON[key];
+    if (idx === undefined) return iconHTML("💨", cls, label);
+    const col = idx % PREMIUM_ATLAS.cols;
+    const row = Math.floor(idx / PREMIUM_ATLAS.cols);
+    return '<span class="premium-icon' + (cls ? " " + cls : "") + '" style="--px:' + col + ";--py:" + row + '" role="img" aria-label="' + escAttr(label || key) + '"></span>';
+}
 function applyChromeIcons() {
     const logo = document.querySelector(".logo-mini .logo-icon-img");
-    if (logo) logo.outerHTML = iconHTML("💨", "logo-icon-img", "Fart Clicker");
+    if (logo) logo.outerHTML = premiumHTML("fart", "logo-icon-img", "Fart Clicker");
     const main = document.querySelector(".main-icon-img");
-    if (main) main.outerHTML = iconHTML("💨", "main-icon-img", "Click");
+    if (main) main.outerHTML = premiumHTML("fart", "main-icon-img", "Click");
     const offline = document.querySelector(".offline-icon-img");
     if (offline) offline.outerHTML = iconHTML("💨", "offline-icon-img", "Offline stink");
-    [["upgrades","🛒"],["pets","🐾"],["casino","💎"],["worlds","🌍"],["aura","✦"]].forEach(([sheet, emoji]) => {
+    [["upgrades","🛒"],["pets","🐾"],["worlds","🌍"],["aura","✦"]].forEach(([sheet, emoji]) => {
         const wrap = document.querySelector('.nav-btn[data-sheet="' + sheet + '"] .nav-ico');
         if (wrap) wrap.innerHTML = iconHTML(emoji, "nav-icon-img", sheet);
     });
+    const casinoNav = document.querySelector('.nav-btn[data-sheet="casino"] .nav-ico');
+    if (casinoNav) casinoNav.innerHTML = premiumHTML("chip", "nav-icon-img", "Casino");
 }
 
 
@@ -1235,11 +1253,32 @@ function upgradeCost(i) {
     return Math.floor(u.baseCost * Math.pow(UPGRADE_GROWTH, lvl) * (1 + lvl * 0.018));
 }
 function getRebirthCost() { return Math.floor(12000000 * Math.pow(4.9, game.rebirths || 0)); }
+function peakWorld() { return Math.max(game.peakWorldIdx || 0, game.worldIdx || 0); }
+function totalAuraSpent() {
+    let s = 0;
+    AURA_UPGRADES.forEach((u, i) => {
+        const lvl = game.auraUpgrades[i] || 0;
+        for (let l = 0; l < lvl; l++) s += Math.floor(u.base * Math.pow(2.1, l) * (l >= 15 ? 3 : 1));
+    });
+    return s;
+}
 function auraGainPreview() {
-    return Math.max(1, Math.floor(Math.pow(game.rebirths + 1, 1.35) * auraMult("auragain")));
+    const rb = game.rebirths || 0;
+    const w = peakWorld();
+    let base = Math.floor(Math.log2(rb + 1) * 2 + Math.sqrt(w + 1));
+    const c = game.casino;
+    const tax = c && c.auraTaxStacks ? Math.max(0.45, 1 - c.auraTaxStacks * 0.05) : 1;
+    return Math.max(1, Math.floor(base * auraMult("auragain") * tax));
 }
 function auraUpCost(i) {
-    const u = AURA_UPGRADES[i]; return Math.floor(u.base * Math.pow(1.7, game.auraUpgrades[i] || 0));
+    const u = AURA_UPGRADES[i];
+    const lvl = game.auraUpgrades[i] || 0;
+    return Math.floor(u.base * Math.pow(2.1, lvl) * (lvl >= 15 ? 3 : 1));
+}
+function grantChips(n, reason) {
+    if (!n || n <= 0) return;
+    game.chips = (game.chips || 0) + n;
+    if (reason) showToast("🪙 +" + n + " Chips · " + reason, 2200);
 }
 function initUpgrades() {
     if (!game.upgrades) game.upgrades = {};
@@ -1252,7 +1291,7 @@ function initUpgrades() {
 // ============================================================
 //  SAVE / LOAD (+ offline earnings)
 // ============================================================
-const SAVE_KEY = "fartSave_v7";
+const SAVE_KEY = "fartSave_v8";
 let offlinePending = 0;
 
 function clearAllSaveData() {
@@ -1276,8 +1315,12 @@ function sanitizeGameState() {
     if (typeof game.aura !== "number" || isNaN(game.aura) || game.aura < 0) game.aura = 0;
     if (!game.auraUpgrades || typeof game.auraUpgrades !== "object") game.auraUpgrades = {};
     if (!game.redeemedCodes || typeof game.redeemedCodes !== "object") game.redeemedCodes = {};
+    if (typeof game.chips !== "number" || isNaN(game.chips) || game.chips < 0) game.chips = 0;
+    if (typeof game.peakWorldIdx !== "number" || game.peakWorldIdx < 0) game.peakWorldIdx = game.worldIdx || 0;
+    game.peakWorldIdx = Math.max(game.peakWorldIdx, game.worldIdx || 0);
     if (!game.casino && typeof freshCasinoState === "function") game.casino = freshCasinoState();
     else if (!game.casino) game.casino = { secretShards: 0, lastWheelSpin: 0, slotBuffUntil: 0, slotBuffMult: 1, goldenBuffUntil: 0, goldenBuffMult: 1, eggDiscountUntil: 0, eggDiscountPct: 0, scratchPity: 0, lootPity: 0, totalGambles: 0 };
+    if (typeof ensureCasino === "function") ensureCasino();
     AURA_UPGRADES.forEach((u, i) => {
         let lvl = game.auraUpgrades[i] || 0;
         if (typeof lvl !== "number" || isNaN(lvl) || lvl < 0) lvl = 0;
@@ -1304,7 +1347,8 @@ function saveGame(force) {
 }
 function loadGame() {
     try {
-        const s = localStorage.getItem(SAVE_KEY);
+        let s = localStorage.getItem(SAVE_KEY);
+        if (!s) s = localStorage.getItem("fartSave_v7");
         if (s) {
             const p = JSON.parse(s);
             if (p && typeof p === "object") {
@@ -1319,6 +1363,7 @@ function loadGame() {
         game = freshGameState();
     }
     sanitizeGameState();
+    if ((game.chips || 0) < 3 && (game.totalEarned || 0) < 5000) game.chips = 8;
     indexWorld = game.worldIdx;
     computeOffline();
 }
@@ -1670,13 +1715,16 @@ function rebirth() {
     const cost = getRebirthCost();
     if (game.points < cost) { sfxError(); showToast("❌ Need " + fmt(cost) + " Stink to Rebirth!", 2500); return; }
     const gain = auraGainPreview();
+    const chipGain = Math.max(1, Math.floor(Math.sqrt(game.rebirths + 1) * 2 + Math.sqrt(peakWorld() + 1)));
     game.rebirths++; game.aura += gain;
     game.points = 0; game.upgrades = {}; initUpgrades();
     comboValue = 0; spamMultiplier = 1;
+    grantChips(chipGain);
+    if (game.casino) game.casino.auraTaxStacks = Math.max(0, (game.casino.auraTaxStacks || 0) - 1);
     sfxRare(4); screenFlash("#ffd54a"); shake(); shockwave("#ffd54a"); emojiRain(["🔄","✦","💨","🌟"], 24);
     updateDisplay(); renderUpgradeTabs(); renderWorlds(); saveGame();
     bigBanner("REBIRTH #" + game.rebirths, "#ffd54a");
-    showToast("🔄 REBORN! +25% power · +" + gain + " ✦ Aura!", 3200);
+    showToast("🔄 REBORN! +" + gain + " ✦ Aura · +" + chipGain + " 🪙 Chips!", 3200);
 }
 function renderWorlds() {
     let html = '<div class="world-grid">';
@@ -1692,7 +1740,13 @@ function renderWorlds() {
 }
 function selectWorld(i) {
     const w = WORLDS[i]; if (!w || game.rebirths < w.reqRebirths) { sfxError(); return; }
-    game.worldIdx = i; indexWorld = i; sfxBuy(); updateDisplay(); renderWorlds(); saveGame();
+    const prevPeak = game.peakWorldIdx || 0;
+    game.worldIdx = i; indexWorld = i;
+    if (i > prevPeak) {
+        game.peakWorldIdx = i;
+        grantChips(3 + i * 2, "new world unlocked");
+    }
+    sfxBuy(); updateDisplay(); renderWorlds(); saveGame();
     restartWorldMusic();
     applyWorldTheme(); updateCornerGlows();
     screenFlash(w.theme && w.theme.p ? w.theme.p : "#ffd54a");
@@ -1704,8 +1758,10 @@ function selectWorld(i) {
 //  AURA (prestige shop)
 // ============================================================
 function renderAura() {
+    const spent = totalAuraSpent();
     let html = '<div class="aura-hero"><div class="aura-bal">✦ ' + fmt(game.aura) + '</div>' +
-        '<div class="aura-sub">Aura · permanent power. Next rebirth grants <b>+' + auraGainPreview() + ' ✦</b></div></div>';
+        '<div class="aura-sub">Aura is scarce. Next rebirth: <b>+' + auraGainPreview() + ' ✦</b> · spent ' + spent + ' total</div>' +
+        '<div class="aura-sub aura-warn">Casino gambling reduces next rebirth Aura. Invest wisely.</div></div>';
     html += '<div class="aura-list">';
     AURA_UPGRADES.forEach((u, i) => {
         const lvl = game.auraUpgrades[i] || 0;
@@ -1723,6 +1779,9 @@ function buyAura(i) {
     const u = AURA_UPGRADES[i]; if (!u) return;
     const lvl = game.auraUpgrades[i] || 0;
     if (u.max && lvl >= u.max) { sfxError(); return; }
+    if ((u.effect === "multi" || u.effect === "mega") && totalAuraSpent() < 12) {
+        sfxError(); showToast("🔒 Spend 12 ✦ on core auras first!", 2400); return;
+    }
     const cost = auraUpCost(i);
     if (game.aura >= cost) {
         game.aura -= cost; game.auraUpgrades[i] = lvl + 1;
@@ -2716,6 +2775,7 @@ function setTxt(id, v) {
 }
 function updateDisplay() {
     setTxt("points", fmt(game.points));
+    setTxt("chips", fmt(game.chips || 0));
     setTxt("per-click", fmt(getClickPower() * getPetMult()));
     setTxt("passive-income", fmt(getPassive() * getPetMult()) + "/s");
     setTxt("rebirths", String(game.rebirths || 0));

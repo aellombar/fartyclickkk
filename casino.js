@@ -1,20 +1,40 @@
 /* ============================================================
-   CASINO — scratch, slots, wheel, Ohio loot boxes
+   CASINO v2 — Chips currency, canvas scratch, mines, CSGO crates
    ============================================================ */
 
 const WHEEL_COOLDOWN_MS = 10 * 60 * 1000;
-const SCRATCH_SYMBOLS = ["💨", "🌟", "💎", "🐾", "👑", "🌽"];
-const SLOT_SYMBOLS = ["💨", "🐾", "🌟", "👑", "💎", "🌽", "🚽", "🔥"];
+const AD_WHEEL_COOLDOWN_MS = 30 * 60 * 1000;
+const DAILY_GAMBLE_CAP = 48;
+const CHIP_BASE = { scratch: 4, mines: 6, crate: 10, loot: 14, wheelPaid: 8 };
+const CASINO_REQ = { scratch: 0, mines: 2, crate: 3, loot: 4, wheel: 0 };
+
+const SCRATCH_SYMBOLS = ["sym-fart", "sym-paw", "sym-gem", "sym-crown", "shard", "skibidi-god"];
+const CRATE_TABLE = [
+    { key: "sym-fart", label: "Trash Buff", weight: 700, tier: 0 },
+    { key: "sym-paw", label: "Rare Paw", weight: 200, tier: 1 },
+    { key: "sym-crown", label: "Epic Crown", weight: 80, tier: 2 },
+    { key: "sym-gem", label: "Legendary Gem", weight: 18, tier: 3 },
+    { key: "shard", label: "Secret Shard", weight: 1.8, tier: 4 },
+    { key: "skibidi-god", label: "SKIBIDI GOD", weight: 0.2, tier: 5 }
+];
 
 function ensureCasino() {
     if (!game.casino) game.casino = freshCasinoState();
-    return game.casino;
+    const c = game.casino;
+    const today = new Date().toDateString();
+    if (c.gambleDay !== today) { c.gambleDay = today; c.dailyGambles = 0; }
+    if (c.sessionGambles && Date.now() - (c.sessionStart || 0) > 30 * 60 * 1000) {
+        c.sessionGambles = 0; c.sessionStart = Date.now();
+    }
+    if (!c.sessionStart) c.sessionStart = Date.now();
+    return c;
 }
 
 function freshCasinoState() {
     return {
         secretShards: 0,
         lastWheelSpin: 0,
+        lastAdWheel: 0,
         wheelSpins: 0,
         slotBuffUntil: 0,
         slotBuffMult: 1,
@@ -24,37 +44,52 @@ function freshCasinoState() {
         eggDiscountPct: 0,
         scratchPity: 0,
         lootPity: 0,
-        totalGambles: 0
+        totalGambles: 0,
+        dailyGambles: 0,
+        gambleDay: "",
+        sessionGambles: 0,
+        sessionStart: Date.now(),
+        auraTaxStacks: 0,
+        minesActive: false,
+        minesCooldownUntil: 0,
+        crateKeys: 0
     };
 }
 
-function scratchCost() {
-    return Math.max(8000, Math.floor(getClickPower() * getPetMult() * 120));
-}
-
-function slotsCost() {
-    const passive = getPassive() * getPetMult();
-    if (passive > 0) return Math.max(50000, Math.floor(passive * 180));
-    return Math.max(25000, Math.floor(getClickPower() * getPetMult() * 400));
-}
-
-function lootBoxCost() {
-    const eggs = getEggTemplates();
-    const base = eggs[0] ? eggCost(eggs[0], game.worldIdx) : 100000;
-    return Math.max(base * 6, Math.floor(getClickPower() * getPetMult() * 2500));
-}
-
-function wheelReady() {
+function chipPrice(kind) {
+    const w = peakWorld();
+    const pressure = Math.pow(1.42, Math.max(0, w));
     const c = ensureCasino();
-    return Date.now() - (c.lastWheelSpin || 0) >= WHEEL_COOLDOWN_MS;
+    const esc = 1 + (c.sessionGambles || 0) * 0.11;
+    const tier = Math.floor(w / 3);
+    return Math.max(2, Math.ceil((CHIP_BASE[kind] || 5) * pressure * esc * Math.pow(1.18, tier)));
 }
 
-function wheelCountdown() {
-    const left = WHEEL_COOLDOWN_MS - (Date.now() - (ensureCasino().lastWheelSpin || 0));
-    if (left <= 0) return "READY!";
-    const m = Math.floor(left / 60000);
-    const s = Math.floor((left % 60000) / 1000);
-    return m + "m " + s + "s";
+function casinoUnlocked(kind) {
+    return peakWorld() >= (CASINO_REQ[kind] || 0);
+}
+
+function canGamble() {
+    const c = ensureCasino();
+    if (c.dailyGambles >= DAILY_GAMBLE_CAP) {
+        showToast("🛑 Daily casino cap reached. Come back tomorrow!", 2800);
+        return false;
+    }
+    return true;
+}
+
+function spendChips(n) {
+    if ((game.chips || 0) < n) return false;
+    game.chips -= n;
+    return true;
+}
+
+function registerGamble() {
+    const c = ensureCasino();
+    c.totalGambles++;
+    c.dailyGambles++;
+    c.sessionGambles++;
+    c.auraTaxStacks = Math.min(8, (c.auraTaxStacks || 0) + 1);
 }
 
 function casinoPassiveMult() {
@@ -75,41 +110,84 @@ function casinoEggDiscount() {
     return c.eggDiscountPct || 0;
 }
 
+function wheelReady() {
+    return Date.now() - (ensureCasino().lastWheelSpin || 0) >= WHEEL_COOLDOWN_MS;
+}
+
+function wheelCountdown() {
+    const left = WHEEL_COOLDOWN_MS - (Date.now() - (ensureCasino().lastWheelSpin || 0));
+    if (left <= 0) return "READY!";
+    return Math.floor(left / 60000) + "m " + Math.floor((left % 60000) / 1000) + "s";
+}
+
+function adWheelReady() {
+    return Date.now() - (ensureCasino().lastAdWheel || 0) >= AD_WHEEL_COOLDOWN_MS;
+}
+
+/* ---- Rewarded ad stub (swap provider later) ---- */
+function showRewardedAd(onComplete, label) {
+    const overlay = document.getElementById("ad-overlay") || (function() {
+        const el = document.createElement("div");
+        el.id = "ad-overlay";
+        el.className = "modal";
+        el.innerHTML = '<div class="modal-content ad-modal-content"><h2>📺 Rewarded Ad</h2><p id="ad-status">Loading sponsor...</p><div class="ad-progress"><div id="ad-bar"></div></div><button class="modal-btn secondary" onclick="cancelRewardedAd()">Skip (dev)</button></div>';
+        document.body.appendChild(el);
+        return el;
+    })();
+    window._adCallback = onComplete;
+    document.getElementById("ad-status").textContent = label || "Watch to claim reward...";
+    overlay.classList.remove("hidden");
+    let p = 0;
+    const bar = document.getElementById("ad-bar");
+    const tick = setInterval(() => {
+        p += 4;
+        if (bar) bar.style.width = p + "%";
+        if (p >= 100) {
+            clearInterval(tick);
+            overlay.classList.add("hidden");
+            if (window._adCallback) { window._adCallback(); window._adCallback = null; }
+            showToast("✅ Reward claimed!", 1800);
+        }
+    }, 200);
+    window._adTick = tick;
+}
+
+function cancelRewardedAd() {
+    if (window._adTick) clearInterval(window._adTick);
+    const overlay = document.getElementById("ad-overlay");
+    if (overlay) overlay.classList.add("hidden");
+    if (window._adCallback) { window._adCallback(); window._adCallback = null; }
+}
+
 function renderCasino() {
     const el = document.getElementById("casino-body");
     if (!el) return;
     const c = ensureCasino();
     const buffActive = c.slotBuffUntil > Date.now();
     el.innerHTML =
-        '<div class="casino-hero">' +
-            '<div class="casino-hero-title">🎰 STINK CASINO</div>' +
-            '<div class="casino-hero-sub">The house always wins... unless you\'re built different.</div>' +
+        '<div class="casino-hero premium-hero">' +
+            premiumHTML("casino-banner", "casino-banner-img", "Stink Casino") +
+            '<div class="casino-hero-title">STINK CASINO</div>' +
+            '<div class="casino-hero-sub">Chips only · peak world pricing · house always wins</div>' +
             '<div class="casino-stats">' +
-                '<span>💎 Shards: <b>' + c.secretShards + '</b></span>' +
-                '<span>🎲 Rolls: <b>' + c.totalGambles + '</b></span>' +
-                (buffActive ? '<span class="casino-hot">🔥 Slot buff x' + c.slotBuffMult + '</span>' : '') +
+                '<span>' + premiumHTML("chip", "casino-stat-ico", "Chips") + ' <b>' + fmt(game.chips || 0) + '</b></span>' +
+                '<span>' + premiumHTML("shard", "casino-stat-ico", "Shards") + ' <b>' + c.secretShards + '</b></span>' +
+                '<span>🎲 <b>' + c.dailyGambles + '/' + DAILY_GAMBLE_CAP + '</b> today</span>' +
+                (buffActive ? '<span class="casino-hot">🔥 x' + c.slotBuffMult + ' passive</span>' : '') +
             '</div>' +
         '</div>' +
         '<div class="casino-grid">' +
-            casinoCard("scratch", "🎫 Dank Scratch", "Match 3 tiles for JACKPOT", fmt(scratchCost()) + " 💨", "buyScratch()") +
-            casinoCard("slots", "🎰 Stink Slots", "3-of-a-kind = passive income boost", fmt(slotsCost()) + " 💨", "playSlots()") +
-            casinoCard("wheel", "🎡 Lucky Wheel", wheelReady() ? "FREE SPIN READY!" : ("Next: " + wheelCountdown()), wheelReady() ? "SPIN NOW" : "Wait...", "spinWheel()", !wheelReady()) +
-            casinoCard("loot", "📦 Ohio Loot Box", "0.001% Skibidi God · cursed odds", fmt(lootBoxCost()) + " 💨", "openLootBox()") +
+            casinoCard("scratch", "Dank Scratch", "Scratch foil grid · match line", chipPrice("scratch") + " 🪙", "buyScratch()", !casinoUnlocked("scratch")) +
+            casinoCard("mines", "Stink Mines", "5×5 · cash out or boom", chipPrice("mines") + " 🪙", "startMines()", !casinoUnlocked("mines") || c.minesActive) +
+            casinoCard("crate", "Brainrot Crate", "CSGO-style roll · keys or chips", (c.crateKeys > 0 ? "1 🔑" : chipPrice("crate") + " 🪙"), "openCrate()", !casinoUnlocked("crate")) +
+            casinoCard("loot", "Ohio Case", "Cursed near-miss case", chipPrice("loot") + " 🪙", "openOhioCase()", !casinoUnlocked("loot")) +
+            casinoCard("wheel", "Lucky Wheel", wheelReady() ? "FREE SPIN!" : wheelCountdown(), "FREE", "spinWheel()", !wheelReady()) +
+            casinoCard("ad", "Ad Spin", adWheelReady() ? "Watch ad → bonus spin" : "Ad on cooldown", "📺 FREE", "offerAdWheel()", !adWheelReady()) +
         '</div>' +
         (c.secretShards >= 10
-            ? '<button class="casino-shard-btn" onclick="redeemSecretShards()">💎 Redeem 10 Shards → Secret Pet</button>'
-            : '<p class="casino-shard-hint">Collect 10 💎 shards from jackpots to craft a Secret pet.</p>') +
-        '<p class="casino-disclaimer">⚠️ Gambling uses Stink. Near-misses are intentional. Good luck, nerd.</p>';
-}
-
-function redeemSecretShards() {
-    const c = ensureCasino();
-    if (c.secretShards < 10) { sfxError(); showToast("Need 10 shards!", 1800); return; }
-    c.secretShards -= 10;
-    grantWheelSecretPet();
-    showToast("💎 Shards forged into a SECRET pet!", 3000);
-    sfxRare(5); screenFlash("#00ffd0");
-    saveGame(); updateDisplay(); renderCasino();
+            ? '<button class="casino-shard-btn" onclick="redeemSecretShards()">' + premiumHTML("shard", "casino-shard-ico", "Shard") + ' Redeem 10 Shards → Secret Pet</button>'
+            : '<p class="casino-shard-hint">Jackpots drop shards. 10 = guaranteed secret pet.</p>') +
+        '<p class="casino-disclaimer">⚠️ Chips are scarce. Near-misses intentional. Gambling taxes your next Aura rebirth.</p>';
 }
 
 function casinoCard(id, title, desc, cost, onclick, disabled) {
@@ -119,7 +197,7 @@ function casinoCard(id, title, desc, cost, onclick, disabled) {
         '<div class="casino-card-cost">' + cost + '</div></button>';
 }
 
-function openCasinoModal(id, title, inner) {
+function openCasinoModal(title, inner) {
     let m = document.getElementById("casino-modal");
     if (!m) {
         m = document.createElement("div");
@@ -136,178 +214,385 @@ function openCasinoModal(id, title, inner) {
 function closeCasinoModal() {
     const m = document.getElementById("casino-modal");
     if (m) m.classList.add("hidden");
+    if (window._scratchCleanup) { window._scratchCleanup(); window._scratchCleanup = null; }
 }
 
-/* ---- SCRATCH CARDS ---- */
+/* ---- CANVAS SCRATCH (4×3 grid) ---- */
 function buyScratch() {
-    const cost = scratchCost();
-    if (game.points < cost) { sfxError(); showToast("❌ Not enough Stink!", 1800); return; }
-    game.points -= cost;
-    ensureCasino().totalGambles++;
+    if (!casinoUnlocked("scratch")) { sfxError(); return; }
+    if (!canGamble()) return;
+    const cost = chipPrice("scratch");
+    if (!spendChips(cost)) { sfxError(); showToast("❌ Need " + cost + " Chips!", 2000); return; }
+    registerGamble();
     ensureCasino().scratchPity++;
-    saveGame();
-    updateDisplay();
-    startScratchGame(cost);
+    saveGame(); updateDisplay();
+    startScratchCanvas(cost);
 }
 
-function startScratchGame(cost) {
-    const forceJackpot = ensureCasino().scratchPity >= 18;
-    const forceNearMiss = !forceJackpot && Math.random() < 0.38;
+function startScratchCanvas(betChips) {
+    const cols = 4, rows = 3;
+    const forceJackpot = ensureCasino().scratchPity >= 22;
+    const forceNearMiss = !forceJackpot && Math.random() < 0.36;
     const winSym = SCRATCH_SYMBOLS[Math.floor(Math.random() * SCRATCH_SYMBOLS.length)];
-    let tiles;
+    const grid = [];
+    for (let r = 0; r < rows; r++) {
+        for (let c = 0; c < cols; c++) grid.push(SCRATCH_SYMBOLS[Math.floor(Math.random() * SCRATCH_SYMBOLS.length)]);
+    }
     if (forceJackpot) {
-        tiles = [winSym, winSym, winSym];
+        for (let i = 0; i < cols; i++) grid[i] = winSym;
         ensureCasino().scratchPity = 0;
     } else if (forceNearMiss) {
-        const miss = SCRATCH_SYMBOLS.filter(s => s !== winSym)[Math.floor(Math.random() * 5)];
-        tiles = [winSym, winSym, miss];
-        if (Math.random() < 0.5) tiles.sort(() => Math.random() - 0.5);
-    } else {
-        tiles = [0, 1, 2].map(() => SCRATCH_SYMBOLS[Math.floor(Math.random() * SCRATCH_SYMBOLS.length)]);
-        if (tiles[0] === tiles[1] && tiles[1] === tiles[2] && !forceJackpot) {
-            tiles[2] = SCRATCH_SYMBOLS.filter(s => s !== tiles[0])[0];
-        }
+        grid[0] = grid[1] = grid[2] = winSym;
+        grid[3] = SCRATCH_SYMBOLS.filter(s => s !== winSym)[0];
     }
-    const html = '<div class="scratch-board">' +
-        tiles.map((s, i) => '<button class="scratch-tile covered" id="scratch-' + i + '" onclick="revealScratch(' + i + ')">?</button>').join("") +
-        '</div><p class="scratch-hint" id="scratch-hint">Scratch all 3...</p>';
-    openCasinoModal("scratch", "🎫 Dank Scratch", html);
-    window._scratchTiles = tiles;
-    window._scratchCost = cost;
-    window._scratchRevealed = 0;
+    const html = '<div class="scratch-canvas-wrap"><canvas id="scratch-canvas" width="320" height="240"></canvas></div>' +
+        '<button class="casino-shard-btn scratch-reveal" onclick="finishScratch()">Reveal Result</button>' +
+        '<p class="scratch-hint" id="scratch-hint">Scratch the foil, then reveal. Match full top row.</p>';
+    openCasinoModal("🎫 Dank Scratch", html);
+    window._scratchGrid = grid;
+    window._scratchBet = betChips;
+    window._scratchDone = false;
+    setTimeout(initScratchCanvas, 50);
 }
 
-function revealScratch(i) {
-    const btn = document.getElementById("scratch-" + i);
-    if (!btn || !btn.classList.contains("covered")) return;
-    btn.classList.remove("covered");
-    btn.textContent = window._scratchTiles[i];
-  btn.style.pointerEvents = "none";
-    window._scratchRevealed = (window._scratchRevealed || 0) + 1;
-    sfxBuy();
-    if (window._scratchRevealed < 3) return;
-    const tiles = window._scratchTiles;
-    const hint = document.getElementById("scratch-hint");
-    if (tiles[0] === tiles[1] && tiles[1] === tiles[2]) {
-        resolveScratchJackpot(hint);
-    } else if (tiles[0] === tiles[1] || tiles[1] === tiles[2] || tiles[0] === tiles[2]) {
-        if (hint) hint.textContent = "SO CLOSE!!! Two matched... try again 👀";
-        showToast("😭 Near miss! 2 matched — the house smells your pain.", 2800);
-        screenFlash("#ff3d9a");
-    } else {
-        if (hint) hint.textContent = "No match. L + ratio + stink.";
-        const crumb = Math.floor(window._scratchCost * 0.08);
-        game.points += crumb;
-        showToast("💨 Consolation: +" + fmt(crumb) + " Stink", 2000);
+function initScratchCanvas() {
+    const canvas = document.getElementById("scratch-canvas");
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    const cols = 4, rows = 3;
+    const cellW = canvas.width / cols, cellH = canvas.height / rows;
+    const grid = window._scratchGrid;
+    const foil = new Image();
+    foil.onload = () => drawScratchFrame();
+    foil.src = "assets/premium-atlas.png?v=1";
+    function drawScratchFrame() {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        for (let i = 0; i < grid.length; i++) {
+            const col = i % cols, row = Math.floor(i / cols);
+            const x = col * cellW, y = row * cellH;
+            const idx = PREMIUM_ICON[grid[i]] || 0;
+            const sx = (idx % PREMIUM_ATLAS.cols) * PREMIUM_ATLAS.cell;
+            const sy = Math.floor(idx / PREMIUM_ATLAS.cols) * PREMIUM_ATLAS.cell;
+            ctx.drawImage(foil, sx, sy, PREMIUM_ATLAS.cell, PREMIUM_ATLAS.cell, x + 4, y + 4, cellW - 8, cellH - 8);
+        }
+        ctx.fillStyle = "rgba(180,180,200,0.95)";
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.globalCompositeOperation = "source-over";
+        const foilIdx = PREMIUM_ICON["scratch-foil"] || 4;
+        const fsx = (foilIdx % PREMIUM_ATLAS.cols) * PREMIUM_ATLAS.cell;
+        const fsy = Math.floor(foilIdx / PREMIUM_ATLAS.cols) * PREMIUM_ATLAS.cell;
+        for (let i = 0; i < grid.length; i++) {
+            const col = i % cols, row = Math.floor(i / cols);
+            ctx.drawImage(foil, fsx, fsy, PREMIUM_ATLAS.cell, PREMIUM_ATLAS.cell, col * cellW, row * cellH, cellW, cellH);
+        }
     }
-    saveGame(); updateDisplay();
-    setTimeout(closeCasinoModal, 2200);
+    let scratching = false;
+    function scratchAt(px, py) {
+        ctx.globalCompositeOperation = "destination-out";
+        ctx.beginPath();
+        ctx.arc(px, py, 18, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.globalCompositeOperation = "source-over";
+        sfxClick();
+    }
+    function onEnd() {
+        if (window._scratchDone) return;
+        const top = window._scratchGrid.slice(0, 4);
+        const win = top[0] === top[1] && top[1] === top[2] && top[2] === top[3];
+        const near = !win && (top[0] === top[1] && top[1] === top[2]);
+        window._scratchDone = true;
+        const hint = document.getElementById("scratch-hint");
+        if (win) resolveScratchJackpot(hint);
+        else if (near) {
+            if (hint) hint.textContent = "SO CLOSE!!! 3 matched on top row...";
+            showToast("😭 Near miss! The foil knew.", 2800);
+            screenFlash("#ff3d9a");
+        } else {
+            if (hint) hint.textContent = "No line. L + ratio.";
+            grantChips(Math.max(1, Math.floor(window._scratchBet * 0.15)), "consolation");
+        }
+        saveGame(); updateDisplay();
+        setTimeout(closeCasinoModal, 2400);
+    }
+    canvas.addEventListener("pointerdown", e => { scratching = true; scratchAt(e.offsetX, e.offsetY); });
+    canvas.addEventListener("pointermove", e => { if (scratching) scratchAt(e.offsetX, e.offsetY); });
+    canvas.addEventListener("pointerup", () => { scratching = false; });
+    canvas.addEventListener("pointerleave", () => { scratching = false; });
+    window._scratchFinish = onEnd;
+    window._scratchCleanup = () => { scratching = false; window._scratchFinish = null; };
+}
+
+function finishScratch() {
+    if (window._scratchFinish) window._scratchFinish();
 }
 
 function resolveScratchJackpot(hint) {
     const roll = Math.random();
     const c = ensureCasino();
     let msg;
-    if (roll < 0.34) {
+    if (roll < 0.4) {
         c.secretShards++;
-        msg = "💎 SECRET PET SHARD! (" + c.secretShards + " total)";
+        msg = "SECRET SHARD! (" + c.secretShards + ")";
         bigBanner("JACKPOT!!!", "#00ffd0");
-    } else if (roll < 0.67) {
-        const bonus = Math.floor(window._scratchCost * 10);
-        game.points += bonus;
-        msg = "💰 +" + fmt(bonus) + " Stink (10x back!)";
-        screenFlash("#ffd54a"); burstAt(innerWidth / 2, innerHeight / 2, "#ffd54a", 20);
+    } else if (roll < 0.75) {
+        const bonus = Math.max(3, Math.floor(chipPrice("scratch") * 8));
+        grantChips(bonus);
+        msg = "+" + bonus + " Chips!";
+        screenFlash("#ffd54a");
     } else {
-        game.aura = (game.aura || 0) + 2;
-        msg = "✦ +2 AURA!";
+        grantChips(Math.max(2, chipPrice("crate")));
+        msg = "Crate refund chips!";
         rainbowFlash();
     }
-    c.eggDiscountPct = 0.2;
-    c.eggDiscountUntil = Date.now() + 5 * 60 * 1000;
+    c.eggDiscountPct = 0.12;
+    c.eggDiscountUntil = Date.now() + 4 * 60 * 1000;
     if (hint) hint.textContent = "✨ JACKPOT! " + msg;
-    showToast("🎉 JACKPOT! " + msg + " + 20% egg discount 5min!", 3500);
+    showToast("🎉 JACKPOT! " + msg, 3200);
     sfxRare(4); shake();
-    saveGame(); updateDisplay();
-    setTimeout(closeCasinoModal, 2800);
 }
 
-/* ---- SLOTS ---- */
-function playSlots() {
-    const cost = slotsCost();
-    if (game.points < cost) { sfxError(); showToast("❌ Not enough Stink!", 1800); return; }
-    game.points -= cost;
-    ensureCasino().totalGambles++;
-    saveGame(); updateDisplay();
-    const nearMiss = Math.random() < 0.32;
-    const winSym = SLOT_SYMBOLS[Math.floor(Math.random() * SLOT_SYMBOLS.length)];
-    let reels;
-    if (nearMiss) {
-        const miss = SLOT_SYMBOLS.filter(s => s !== winSym)[0];
-        reels = [winSym, winSym, miss];
-    } else {
-        reels = [0, 1, 2].map(() => SLOT_SYMBOLS[Math.floor(Math.random() * SLOT_SYMBOLS.length)]);
+/* ---- MINES ---- */
+function startMines() {
+    if (!casinoUnlocked("mines")) { sfxError(); return; }
+    const c = ensureCasino();
+    if (c.minesActive) { showToast("Finish your current board!", 1800); return; }
+    if (Date.now() < (c.minesCooldownUntil || 0)) {
+        showToast("⏳ Mines cooling down...", 2000); return;
     }
-    const html = '<div class="slots-machine">' +
-        reels.map((_, i) => '<div class="slot-reel" id="slot-reel-' + i + '">❓</div>').join("") +
-        '</div><p class="slots-status" id="slots-status">Spinning...</p>';
-    openCasinoModal("slots", "🎰 Stink Slots", html);
-    window._slotReels = reels;
-    animateSlots(0);
+    if (!canGamble()) return;
+    const cost = chipPrice("mines");
+    if (!spendChips(cost)) { sfxError(); showToast("❌ Need " + cost + " Chips!", 2000); return; }
+    registerGamble();
+    c.minesActive = true;
+    const size = 5, mines = 4;
+    const cells = size * size;
+    const mineSet = new Set();
+    while (mineSet.size < mines) mineSet.add(Math.floor(Math.random() * cells));
+    c.minesState = { size, mines: mineSet, revealed: [], mult: 1, bet: cost, alive: true };
+    saveGame(); updateDisplay();
+    renderMinesBoard();
 }
 
-function animateSlots(step) {
-    if (step < 12) {
-        [0, 1, 2].forEach(i => {
-            const el = document.getElementById("slot-reel-" + i);
-            if (el) el.textContent = SLOT_SYMBOLS[Math.floor(Math.random() * SLOT_SYMBOLS.length)];
-        });
-        setTimeout(() => animateSlots(step + 1), 80 + step * 12);
+function renderMinesBoard() {
+    const st = ensureCasino().minesState;
+    if (!st) return;
+    let html = '<div class="mines-hud">Mult: <b id="mines-mult">x' + st.mult.toFixed(2) + '</b> · Mines: ' + st.mines.size + '</div>' +
+        '<div class="mines-grid">';
+    for (let i = 0; i < st.size * st.size; i++) {
+        const rev = st.revealed.indexOf(i) >= 0;
+        const isMine = st.mines.has(i);
+        let inner = "?";
+        let cls = "mine-tile";
+        if (rev) {
+            cls += isMine ? " boom" : " safe";
+            inner = isMine ? premiumHTML("mine-bomb", "mine-tile-ico", "Bomb") : premiumHTML("mine-safe", "mine-tile-ico", "Safe");
+        }
+        html += '<button class="' + cls + '" onclick="pickMine(' + i + ')"' + (rev ? ' disabled' : '') + '>' + inner + '</button>';
+    }
+    html += '</div><button class="casino-shard-btn mines-cashout" onclick="cashOutMines()">💰 Cash Out</button>';
+    openCasinoModal("💣 Stink Mines", html);
+}
+
+function pickMine(i) {
+    const c = ensureCasino();
+    const st = c.minesState;
+    if (!st || !st.alive || st.revealed.indexOf(i) >= 0) return;
+    st.revealed.push(i);
+    if (st.mines.has(i)) {
+        st.alive = false;
+        c.minesActive = false;
+        c.minesCooldownUntil = Date.now() + 3 * 60 * 1000;
+        showToast("💥 BOOM! Ohio got you.", 2800);
+        screenFlash("#ff2020");
+        if (Math.random() < 0.4) showToast("👻 You would have had x" + (st.mult * 1.6).toFixed(1) + " if you stopped...", 3200);
+        saveGame(); renderMinesBoard();
+        setTimeout(closeCasinoModal, 2800);
         return;
     }
-    const reels = window._slotReels;
-    [0, 1, 2].forEach(i => {
-        const el = document.getElementById("slot-reel-" + i);
-        if (el) el.textContent = reels[i];
-    });
-    const status = document.getElementById("slots-status");
+    st.mult *= 1.12 + Math.random() * 0.35;
+    sfxBuy();
+    const el = document.getElementById("mines-mult");
+    if (el) el.textContent = "x" + st.mult.toFixed(2);
+    renderMinesBoard();
+}
+
+function cashOutMines() {
     const c = ensureCasino();
-    if (reels[0] === reels[1] && reels[1] === reels[2]) {
-        c.slotBuffMult = 2.8;
-        c.slotBuffUntil = Date.now() + 60000;
-        if (status) status.textContent = "✨ TRIPLE! Passive x2.8 for 60s!";
-        showToast("🎰 TRIPLE MATCH! Passive income x2.8!", 3000);
-        screenFlash("#7fff00"); sfxRare(3); shake();
-    } else if (reels[0] === reels[1] || reels[1] === reels[2] || reels[0] === reels[2]) {
-        c.slotBuffMult = 1.5;
-        c.slotBuffUntil = Date.now() + 45000;
-        if (status) status.textContent = "😮 So close! Double match — x1.5 passive 45s";
-        showToast("Near miss pays! Passive x1.5 for 45s", 2500);
-    } else {
-        if (status) status.textContent = "No match. The slots hunger.";
-        showToast("💀 No match. Feed the machine again?", 2000);
+    const st = c.minesState;
+    if (!st || !st.alive) return;
+    const payout = Math.max(1, Math.floor(st.bet * st.mult * 0.88));
+    grantChips(payout, "mines cashout");
+    c.minesActive = false;
+    c.minesCooldownUntil = Date.now() + 90 * 1000;
+    st.alive = false;
+    showToast("💰 Cashed x" + st.mult.toFixed(2) + " → " + payout + " chips!", 2800);
+    saveGame(); updateDisplay(); renderCasino();
+    setTimeout(closeCasinoModal, 2200);
+}
+
+/* ---- CSGO CRATE ROLLER ---- */
+function openCrate() {
+    if (!casinoUnlocked("crate")) { sfxError(); return; }
+    if (!canGamble()) return;
+    const c = ensureCasino();
+    let usedKey = false;
+    if (c.crateKeys > 0) { c.crateKeys--; usedKey = true; }
+    else {
+        const cost = chipPrice("crate");
+        if (!spendChips(cost)) { sfxError(); showToast("❌ Need " + cost + " Chips or a 🔑!", 2000); return; }
     }
-    saveGame();
-    setTimeout(closeCasinoModal, 2400);
+    registerGamble();
+    saveGame(); updateDisplay();
+    const won = rollCrateItem(false);
+    const near = won.tier < 5 && Math.random() < 0.34;
+    const strip = buildCrateStrip(won, near);
+    const html = '<div class="crate-stage">' + premiumHTML("crate", "crate-stage-ico", "Crate") + '</div>' +
+        '<div class="crate-viewport"><div class="crate-marker"></div><div class="crate-strip" id="crate-strip"></div></div>' +
+        '<p class="crate-status" id="crate-status">Opening...</p>';
+    openCasinoModal("📦 Brainrot Crate", html);
+    const stripEl = document.getElementById("crate-strip");
+    stripEl.innerHTML = strip.map(it =>
+        '<div class="crate-item tier-' + it.tier + '">' + premiumHTML(it.key, "crate-item-ico", it.label) + '<span>' + it.label + '</span></div>'
+    ).join("");
+    const itemW = 88;
+    const winIdx = 28;
+    const offset = -(winIdx * itemW - 140);
+    stripEl.style.transition = "none";
+    stripEl.style.transform = "translateX(0)";
+    requestAnimationFrame(() => {
+        stripEl.style.transition = "transform 5.5s cubic-bezier(0.12,0.7,0.1,1)";
+        stripEl.style.transform = "translateX(" + offset + "px)";
+    });
+    sfxWhoosh();
+    setTimeout(() => resolveCrateWin(won), 5600);
+}
+
+function rollCrateItem(forceGod) {
+    if (forceGod) return CRATE_TABLE[5];
+    const total = CRATE_TABLE.reduce((s, x) => s + x.weight, 0);
+    let roll = Math.random() * total;
+    for (const it of CRATE_TABLE) {
+        roll -= it.weight;
+        if (roll <= 0) return it;
+    }
+    return CRATE_TABLE[0];
+}
+
+function buildCrateStrip(won, nearMiss) {
+    const strip = [];
+    for (let i = 0; i < 40; i++) strip.push(rollCrateItem(false));
+    strip[28] = won;
+    if (nearMiss) strip[27] = CRATE_TABLE[5];
+    return strip;
+}
+
+function resolveCrateWin(won) {
+    const status = document.getElementById("crate-status");
+    const c = ensureCasino();
+    if (won.tier >= 5) {
+        const pet = { id: Date.now(), name: "Skibidi God", emoji: "🚽", rarity: "secret", star: 0, power: petPower(200, game.worldIdx) };
+        game.pets.push(pet);
+        game.discovered[dexKey(game.worldIdx, "Skibidi God")] = true;
+        if (status) status.innerHTML = "✦ SKIBIDI GOD!!!";
+        rainbowFlash(); shake(); bigBanner("GOD ROLL", "#00ffd0"); sfxRare(5);
+    } else if (won.tier >= 4) {
+        c.secretShards += 2;
+        if (status) status.textContent = "💎 2 Secret Shards!";
+        screenFlash("#b14eff");
+    } else if (won.tier >= 3) {
+        c.slotBuffMult = 2.2;
+        c.slotBuffUntil = Date.now() + 90000;
+        if (status) status.textContent = "Legendary! Passive x2.2 · 90s";
+        screenFlash("#7fff00");
+    } else if (won.tier >= 2) {
+        grantChips(chipPrice("crate") * 2);
+        if (status) status.textContent = "Epic chips refund!";
+    } else if (won.tier >= 1) {
+        c.slotBuffMult = 1.35;
+        c.slotBuffUntil = Date.now() + 45000;
+        if (status) status.textContent = "Rare buff x1.35 · 45s";
+    } else {
+        c.slotBuffMult = 1.08;
+        c.slotBuffUntil = Date.now() + 30000;
+        if (status) status.textContent = "Trash buff x1.08 · 30s";
+    }
+    showToast("📦 " + won.label + "!", 2800);
+    saveGame(); updateDisplay(); renderCasino();
+    setTimeout(closeCasinoModal, 3000);
+}
+
+/* ---- OHIO CASE (cursed loot box + roller) ---- */
+function openOhioCase() {
+    if (!casinoUnlocked("loot")) { sfxError(); return; }
+    if (!canGamble()) return;
+    const cost = chipPrice("loot");
+    if (!spendChips(cost)) { sfxError(); showToast("❌ Need " + cost + " Chips!", 2000); return; }
+    registerGamble();
+    const c = ensureCasino();
+    c.lootPity++;
+    saveGame(); updateDisplay();
+    const forceGod = c.lootPity >= 140 || Math.random() < 0.00008;
+    const near = !forceGod && Math.random() < 0.38;
+    openCrateVisualOhio(forceGod, near, cost);
+}
+
+function openCrateVisualOhio(forceGod, nearMiss, cost) {
+    const won = forceGod ? CRATE_TABLE[5] : (nearMiss ? CRATE_TABLE[4] : rollCrateItem(false));
+    if (forceGod) ensureCasino().lootPity = 0;
+    const strip = buildCrateStrip(won, nearMiss && !forceGod);
+    const html = '<div class="loot-odds">📊 Displayed: 0.001% Skibidi God · rigged · only in Ohio</div>' +
+        '<div class="crate-viewport ohio"><div class="crate-marker"></div><div class="crate-strip" id="crate-strip"></div></div>' +
+        '<p class="loot-status" id="loot-status">Cursed case opening...</p>';
+    openCasinoModal("📦 Only In Ohio Case", html);
+    const stripEl = document.getElementById("crate-strip");
+    stripEl.innerHTML = strip.map(it =>
+        '<div class="crate-item tier-' + it.tier + '">' + premiumHTML(it.key, "crate-item-ico", it.label) + '</div>'
+    ).join("");
+    const offset = -(28 * 88 - 140);
+    requestAnimationFrame(() => {
+        stripEl.style.transition = "transform 6s cubic-bezier(0.08,0.82,0.12,1)";
+        stripEl.style.transform = "translateX(" + offset + "px)";
+    });
+    setTimeout(() => {
+        const status = document.getElementById("loot-status");
+        if (forceGod) {
+            resolveCrateWin(CRATE_TABLE[5]);
+            if (status) status.textContent = "🚽🚽🚽 SKIBIDI GOD — ONLY IN OHIO";
+        } else if (nearMiss) {
+            grantChips(Math.max(1, Math.floor(cost * 0.06)));
+            if (status) status.textContent = "🚽🚽 ...💩 MISSED GOD BY ONE";
+            showToast("😱 SO CLOSE!!! Pain.", 3200);
+            screenFlash("#ff3d9a");
+        } else {
+            resolveCrateWin(won);
+            if (status) status.textContent = won.label;
+        }
+        saveGame(); updateDisplay(); renderCasino();
+        setTimeout(closeCasinoModal, 3200);
+    }, 6100);
 }
 
 /* ---- WHEEL ---- */
 const WHEEL_SEGMENTS = [
-    { label: "500 💨", weight: 22, fn: () => { game.points += 500; } },
-    { label: "5K 💨", weight: 18, fn: () => { game.points += 5000; } },
-    { label: "50K 💨", weight: 14, fn: () => { game.points += 50000; } },
-    { label: "Golden Fart x2", weight: 12, fn: () => { const c = ensureCasino(); c.goldenBuffMult = 2; c.goldenBuffUntil = Date.now() + 5 * 60 * 1000; } },
-    { label: "Egg -15%", weight: 10, fn: () => { const c = ensureCasino(); c.eggDiscountPct = 0.15; c.eggDiscountUntil = Date.now() + 10 * 60 * 1000; } },
-    { label: "1M 💨", weight: 9, fn: () => { game.points += 1e6; } },
-    { label: "✦ 1 Aura", weight: 8, fn: () => { game.aura = (game.aura || 0) + 1; } },
-    { label: "🌟 SECRET PET", weight: 0.1, fn: () => grantWheelSecretPet() }
+    { label: "2 Chips", weight: 24, fn: () => grantChips(2) },
+    { label: "5 Chips", weight: 18, fn: () => grantChips(5) },
+    { label: "Golden Fart x2", weight: 14, fn: () => { const c = ensureCasino(); c.goldenBuffMult = 2; c.goldenBuffUntil = Date.now() + 4 * 60 * 1000; } },
+    { label: "Egg -12%", weight: 12, fn: () => { const c = ensureCasino(); c.eggDiscountPct = 0.12; c.eggDiscountUntil = Date.now() + 8 * 60 * 1000; } },
+    { label: "12 Chips", weight: 10, fn: () => grantChips(12) },
+    { label: "1 Shard", weight: 6, fn: () => { ensureCasino().secretShards++; } },
+    { label: "Crate Key", weight: 4, fn: () => { ensureCasino().crateKeys++; } },
+    { label: "SECRET PET", weight: 0.08, fn: () => grantWheelSecretPet() }
 ];
 
-function spinWheel() {
-    if (!wheelReady()) { sfxError(); showToast("⏳ Wheel ready in " + wheelCountdown(), 2000); return; }
+function spinWheel(fromAd) {
+    if (!fromAd && !wheelReady()) { sfxError(); showToast("⏳ " + wheelCountdown(), 2000); return; }
+    if (!fromAd && !canGamble()) return;
     const c = ensureCasino();
-    c.lastWheelSpin = Date.now();
+    if (!fromAd) {
+        c.lastWheelSpin = Date.now();
+        registerGamble();
+    }
     c.wheelSpins++;
-    c.totalGambles++;
     const totalW = WHEEL_SEGMENTS.reduce((s, x) => s + x.weight, 0);
     let roll = Math.random() * totalW;
     let picked = WHEEL_SEGMENTS[0];
@@ -315,123 +600,49 @@ function spinWheel() {
         roll -= seg.weight;
         if (roll <= 0) { picked = seg; break; }
     }
-    const html = '<div class="wheel-wrap"><div class="wheel-spinner" id="wheel-spinner">🎡</div></div><p id="wheel-result" class="wheel-result">Spinning...</p>';
-    openCasinoModal("wheel", "🎡 Lucky Wheel", html);
-    const spinner = document.getElementById("wheel-spinner");
-    if (spinner) spinner.style.animation = "wheelSpin 3.5s cubic-bezier(0.2,0.8,0.3,1) forwards";
+    const html = '<div class="wheel-wrap">' + premiumHTML("wheel", "wheel-premium", "Wheel") + '</div><p id="wheel-result" class="wheel-result">Spinning...</p>';
+    openCasinoModal("🎡 Lucky Wheel", html);
     sfxWhoosh();
     setTimeout(() => {
         picked.fn();
         const res = document.getElementById("wheel-result");
-        if (res) res.textContent = "🎉 You won: " + picked.label + "!";
-        if (picked.weight <= 0.2) {
-            rainbowFlash(); shake(); bigBanner("SECRET!!!", "#00ffd0"); sfxRare(5);
-        } else {
-            screenFlash("#ffd54a"); sfxBuy();
-        }
-        showToast("🎡 Wheel: " + picked.label, 2800);
+        if (res) res.textContent = "🎉 " + picked.label + "!";
+        if (picked.weight <= 0.2) { rainbowFlash(); shake(); bigBanner("SECRET!!!", "#00ffd0"); sfxRare(5); }
+        else { screenFlash("#ffd54a"); sfxBuy(); }
+        showToast("🎡 " + picked.label, 2800);
         saveGame(); updateDisplay(); renderCasino();
         setTimeout(closeCasinoModal, 2800);
-    }, 3600);
+    }, 3200);
+}
+
+function offerAdWheel() {
+    if (!adWheelReady()) { sfxError(); showToast("Ad spin on cooldown", 2000); return; }
+    showRewardedAd(() => {
+        ensureCasino().lastAdWheel = Date.now();
+        spinWheel(true);
+    }, "Watch ad for a bonus wheel spin!");
 }
 
 function grantWheelSecretPet() {
     const pets = allPetsForWorld(game.worldIdx).filter(p => RARITY[p.rarity].tier >= 5);
     const template = pets.length ? pets[Math.floor(Math.random() * pets.length)] : { name: "Wheel God", emoji: "🚽", rarity: "secret", base: 150 };
-    const pet = {
+    game.pets.push({
         id: Date.now() + Math.floor(Math.random() * 99999),
         name: template.name,
         emoji: template.emoji || "✦",
         rarity: "secret",
         star: 0,
-        power: petPower(template.base || 120, game.worldIdx) * 1.2
-    };
-    game.pets.push(pet);
-    game.discovered[dexKey(game.worldIdx, pet.name)] = true;
-}
-
-/* ---- OHIO LOOT BOX ---- */
-function openLootBox() {
-    const cost = lootBoxCost();
-    if (game.points < cost) { sfxError(); showToast("❌ Not enough Stink!", 1800); return; }
-    game.points -= cost;
-    const c = ensureCasino();
-    c.totalGambles++;
-    c.lootPity++;
-    saveGame(); updateDisplay();
-    const forceGod = c.lootPity >= 120 || Math.random() < 0.00001;
-    const nearMiss = !forceGod && Math.random() < 0.35;
-    const html = '<div class="loot-odds">📊 Displayed odds: 0.001% Skibidi God · 4.99% Epic · 25% Rare · 70% Cursed Trash</div>' +
-        '<div class="loot-slots" id="loot-slots">' +
-        '<div class="loot-slot">?</div><div class="loot-slot">?</div><div class="loot-slot">?</div></div>' +
-        '<p class="loot-status" id="loot-status">Opening cursed box...</p>';
-    openCasinoModal("loot", "📦 Only In Ohio Loot Box", html);
-    setTimeout(() => revealLootBox(forceGod, nearMiss, cost), 600);
-}
-
-function revealLootBox(forceGod, nearMiss, cost) {
-    const slots = document.querySelectorAll(".loot-slot");
-    const status = document.getElementById("loot-status");
-    const godIcon = "🚽";
-    const trashIcon = "💩";
-    let outcome;
-    if (forceGod) {
-        outcome = "god";
-        ensureCasino().lootPity = 0;
-    } else if (nearMiss) {
-        outcome = "near";
-    } else {
-        const r = Math.random();
-        if (r < 0.7) outcome = "trash";
-        else if (r < 0.95) outcome = "rare";
-        else if (r < 0.999) outcome = "epic";
-        else outcome = "god";
-    }
-    const sequence = outcome === "god" ? [godIcon, godIcon, godIcon]
-        : outcome === "near" ? [godIcon, godIcon, trashIcon]
-        : outcome === "epic" ? ["💎", "💎", "💎"]
-        : outcome === "rare" ? ["🌟", "🌟", "🐾"]
-        : [trashIcon, "🌽", "💨"];
-    if (outcome === "near" && Math.random() < 0.5) sequence.sort(() => Math.random() - 0.5);
-    slots.forEach((s, i) => {
-        setTimeout(() => {
-            s.textContent = sequence[i];
-            s.classList.add("revealed");
-            sfxClick();
-            if (i === 2) resolveLootOutcome(outcome, cost, status);
-        }, i * 700);
+        power: petPower(template.base || 120, game.worldIdx) * 1.15
     });
+    game.discovered[dexKey(game.worldIdx, template.name)] = true;
 }
 
-function resolveLootOutcome(outcome, cost, status) {
+function redeemSecretShards() {
     const c = ensureCasino();
-    if (outcome === "god") {
-        const pet = { id: Date.now(), name: "Skibidi God", emoji: "🚽", rarity: "secret", star: 0, power: petPower(200, game.worldIdx) };
-        game.pets.push(pet);
-        game.discovered[dexKey(game.worldIdx, "Skibidi God")] = true;
-        if (status) status.textContent = "✦ SKIBIDI GOD!!! ONLY IN OHIO!!!";
-        rainbowFlash(); shake(); bigBanner("SKIBIDI GOD", "#00ffd0"); sfxRare(5);
-        showToast("🚽 YOU GOT SKIBIDI GOD!!!", 4000);
-    } else if (outcome === "epic") {
-        c.secretShards += 2;
-        if (status) status.textContent = "💎 Epic shards acquired!";
-        showToast("💎 +2 secret shards!", 2500);
-        screenFlash("#b14eff");
-    } else if (outcome === "rare") {
-        const bonus = Math.floor(cost * 0.35);
-        game.points += bonus;
-        if (status) status.textContent = "🌟 Rare roll: +" + fmt(bonus) + " Stink";
-        showToast("🌟 Rare! +" + fmt(bonus), 2200);
-    } else if (outcome === "near") {
-        if (status) status.textContent = "🚽🚽 ...💩 ONLY IN OHIO MISSED IT BY ONE";
-        showToast("😱 SO CLOSE TO SKIBIDI GOD!!! Pain.", 3200);
-        screenFlash("#ff3d9a");
-        game.points += Math.floor(cost * 0.05);
-    } else {
-        if (status) status.textContent = "💩 Cursed trash. Only in Ohio moment.";
-        showToast("💩 Cursed box. +10% consolation.", 2000);
-        game.points += Math.floor(cost * 0.1);
-    }
+    if (c.secretShards < 10) { sfxError(); showToast("Need 10 shards!", 1800); return; }
+    c.secretShards -= 10;
+    grantWheelSecretPet();
+    showToast("💎 Shards → SECRET pet!", 3000);
+    sfxRare(5); screenFlash("#00ffd0");
     saveGame(); updateDisplay(); renderCasino();
-    setTimeout(closeCasinoModal, 3200);
 }
