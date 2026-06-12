@@ -1233,14 +1233,47 @@ body::before {
 }
 
 /* ---- REAL WHEEL ---- */
-.wheel-stage { position: relative; width: 260px; margin: 8px auto 12px; }
-.wheel-pointer {
-    position: absolute; top: -6px; left: 50%; transform: translateX(-50%);
-    font-size: 1.8rem; color: #ffd54a; z-index: 3; line-height: 1;
-    filter: drop-shadow(0 2px 4px rgba(0,0,0,0.6));
+.wheel-cabinet {
+    position: relative; width: min(100%, 300px); margin: 8px auto 14px;
+    padding: 14px; border-radius: 22px;
+    background: linear-gradient(180deg, #2a1448, #120828);
+    border: 3px solid #ffd54a;
+    box-shadow: 0 0 0 2px #1a0a38, 0 12px 32px rgba(0,0,0,0.55), inset 0 2px 0 rgba(255,255,255,0.12);
 }
-.wheel-rotor { width: 260px; height: 260px; will-change: transform; }
-.wheel-svg { width: 100%; height: 100%; display: block; filter: drop-shadow(0 0 16px rgba(177,78,255,0.4)); }
+.wheel-cabinet::before {
+    content: ""; position: absolute; inset: 6px; border-radius: 18px; pointer-events: none;
+    border: 1px solid rgba(255,213,74,0.35);
+    box-shadow: inset 0 0 24px rgba(177,78,255,0.25);
+}
+.wheel-lights {
+    position: absolute; inset: 8px; border-radius: 18px; pointer-events: none; z-index: 1;
+    background: repeating-conic-gradient(from 0deg, rgba(255,213,74,0.5) 0 4deg, transparent 4deg 12deg);
+    mask: radial-gradient(circle, transparent 58%, #000 59%);
+    opacity: 0.45;
+}
+.wheel-stage { position: relative; width: 260px; height: 260px; margin: 0 auto; z-index: 2; }
+.wheel-pointer {
+    position: absolute; top: -2px; left: 50%; transform: translateX(-50%);
+    z-index: 5; width: 0; height: 0;
+    border-left: 14px solid transparent; border-right: 14px solid transparent;
+    border-top: 26px solid #ffd54a;
+    filter: drop-shadow(0 3px 6px rgba(0,0,0,0.7));
+}
+.wheel-pointer::after {
+    content: ""; position: absolute; top: -30px; left: -8px;
+    width: 16px; height: 16px; border-radius: 50%;
+    background: radial-gradient(circle at 35% 30%, #fff8c0, #ffd54a 55%, #cc9900);
+    border: 2px solid #fff;
+}
+.wheel-rotor { width: 260px; height: 260px; will-change: transform; border-radius: 50%; }
+.wheel-svg { width: 100%; height: 100%; display: block; filter: drop-shadow(0 4px 14px rgba(0,0,0,0.5)); }
+.wheel-cap {
+    position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
+    width: 52px; height: 52px; border-radius: 50%; z-index: 4; pointer-events: none;
+    background: radial-gradient(circle at 35% 30%, #ffe9a8, #ffb300 45%, #8a5a00);
+    border: 3px solid #fff8d0;
+    box-shadow: 0 0 12px rgba(255,213,74,0.6), inset 0 -4px 8px rgba(0,0,0,0.35);
+}
 .wheel-odds-list {
     display: flex; flex-wrap: wrap; justify-content: center; gap: 5px 10px;
     font-size: 0.66rem; color: var(--muted); margin: 8px 0;
@@ -1326,6 +1359,13 @@ body::before {
     position: relative; width: min(100%, 320px); height: 200px;
     margin: 12px auto; border-radius: 14px; overflow: hidden;
     border: 2px solid var(--gold); box-shadow: 0 0 18px rgba(255,213,74,0.3);
+    touch-action: none;
+}
+.scratch-touch-pad {
+    position: relative; padding: 18px; margin: 4px auto 8px;
+    width: min(100%, 360px); border-radius: 18px;
+    background: rgba(0,0,0,0.2); border: 1px dashed rgba(255,213,74,0.25);
+    touch-action: none;
 }
 .scratch-sym-grid {
     display: grid; grid-template-columns: repeat(4, 1fr);
@@ -1540,6 +1580,7 @@ html.perf-mode .egg-card:hover {
     filter: none !important;
 }
 html.perf-mode .garden-plot.ready { animation: none !important; }
+html.perf-mode .wheel-lights { display: none; }
 html.reduce-ui-anim .up-tab.active { animation: none !important; }
 html.reduce-ui-anim .stab,
 html.reduce-ui-anim .nav-btn {
@@ -1564,7 +1605,8 @@ html.reduce-ui-anim .nav-btn {
     .bottom-nav .nav-ico { font-size: 1.15rem; }
     .rebirth-btn { padding: 10px; font-size: 0.88rem; margin-top: 6px; }
     .sheet-tabs .stab { font-size: 0.72rem; padding: 8px 4px; }
-    #game-container { padding-left: 8px; padding-right: 8px; }
+    #game-container { padding-left: 8px; padding-right: 8px; padding-bottom: calc(var(--nav-h) + 18px); }
+    :root { --nav-h: calc(54px + env(safe-area-inset-bottom, 0px)); }
 }
 
 @media (prefers-reduced-motion: reduce) {

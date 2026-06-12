@@ -275,10 +275,10 @@ function startScratchCanvas(betChips) {
     const symHtml = '<div class="scratch-sym-grid" id="scratch-sym-grid">' +
         grid.map(s => '<div class="scratch-sym">' + s + '</div>').join("") + '</div>';
 
-    const html = '<div class="scratch-outer">' + symHtml +
+    const html = '<div class="scratch-touch-pad" id="scratch-touch-pad"><div class="scratch-outer">' + symHtml +
         '<canvas id="scratch-canvas" width="320" height="240" class="scratch-foil-canvas"></canvas>' +
-        '</div>' +
-        '<p class="scratch-hint" id="scratch-hint">👆 Scratch to reveal · drag finger/mouse</p>';
+        '</div></div>' +
+        '<p class="scratch-hint" id="scratch-hint">👆 Scratch anywhere — edges are forgiving!</p>';
     openCasinoModal("🎫 Dank Scratch", html);
     window._scratchGrid = grid;
     window._scratchBet = betChips;
@@ -320,6 +320,10 @@ function initScratchCanvas() {
 
     let scratching = false;
     let lastSampleAt = 0;
+    let lastScratch = null;
+    let activePointer = null;
+    const EDGE_PAD = 28;
+    const BRUSH = 24;
 
     function getPos(e) {
         const rect = canvas.getBoundingClientRect();
@@ -327,6 +331,13 @@ function initScratchCanvas() {
         const scaleY = canvas.height / rect.height;
         const src = (e.touches && e.touches[0]) ? e.touches[0] : e;
         return { x: (src.clientX - rect.left) * scaleX, y: (src.clientY - rect.top) * scaleY };
+    }
+
+    function clampPos(p) {
+        return {
+            x: Math.max(-EDGE_PAD, Math.min(canvas.width + EDGE_PAD, p.x)),
+            y: Math.max(-EDGE_PAD, Math.min(canvas.height + EDGE_PAD, p.y))
+        };
     }
 
     function scratchedFraction() {
@@ -345,9 +356,11 @@ function initScratchCanvas() {
     }
 
     function scratchAt(px, py) {
+        const cx = Math.max(0, Math.min(canvas.width, px));
+        const cy = Math.max(0, Math.min(canvas.height, py));
         ctx.globalCompositeOperation = "destination-out";
         ctx.beginPath();
-        ctx.arc(px, py, 20, 0, Math.PI * 2);
+        ctx.arc(cx, cy, BRUSH, 0, Math.PI * 2);
         ctx.fill();
         ctx.globalCompositeOperation = "source-over";
         const now = Date.now();
@@ -360,19 +373,48 @@ function initScratchCanvas() {
         }
     }
 
-    function onStart(e) { e.preventDefault(); scratching = true; const p = getPos(e); scratchAt(p.x, p.y); }
-    function onMove(e) { e.preventDefault(); if (scratching) { const p = getPos(e); scratchAt(p.x, p.y); } }
-    function onEnd() { scratching = false; if (!window._scratchDone && scratchedFraction() >= 0.8) autoRevealScratch(); }
+    function scratchLine(a, b) {
+        const dx = b.x - a.x, dy = b.y - a.y;
+        const dist = Math.hypot(dx, dy);
+        const steps = Math.max(1, Math.ceil(dist / 10));
+        for (let i = 0; i <= steps; i++) {
+            scratchAt(a.x + dx * i / steps, a.y + dy * i / steps);
+        }
+    }
 
-    canvas.addEventListener("pointerdown", onStart);
-    canvas.addEventListener("pointermove", onMove);
-    canvas.addEventListener("pointerup", onEnd);
-    canvas.addEventListener("pointerleave", onEnd);
-    canvas.addEventListener("touchstart", onStart, { passive: false });
-    canvas.addEventListener("touchmove", onMove, { passive: false });
-    canvas.addEventListener("touchend", onEnd);
+    function onStart(e) {
+        e.preventDefault();
+        scratching = true;
+        activePointer = e.pointerId;
+        try { canvas.setPointerCapture(e.pointerId); } catch (err) {}
+        const p = clampPos(getPos(e));
+        lastScratch = p;
+        scratchAt(p.x, p.y);
+    }
+    function onMove(e) {
+        if (!scratching || (activePointer != null && e.pointerId !== activePointer)) return;
+        e.preventDefault();
+        const p = clampPos(getPos(e));
+        if (lastScratch) scratchLine(lastScratch, p);
+        else scratchAt(p.x, p.y);
+        lastScratch = p;
+    }
+    function onEnd(e) {
+        if (activePointer != null && e && e.pointerId !== activePointer) return;
+        scratching = false;
+        lastScratch = null;
+        activePointer = null;
+        try { if (e) canvas.releasePointerCapture(e.pointerId); } catch (err) {}
+        if (!window._scratchDone && scratchedFraction() >= 0.8) autoRevealScratch();
+    }
 
-    window._scratchCleanup = () => { scratching = false; };
+    const pad = document.getElementById("scratch-touch-pad") || canvas;
+    pad.addEventListener("pointerdown", onStart);
+    pad.addEventListener("pointermove", onMove);
+    pad.addEventListener("pointerup", onEnd);
+    pad.addEventListener("pointercancel", onEnd);
+
+    window._scratchCleanup = () => { scratching = false; lastScratch = null; activePointer = null; };
 }
 
 function autoRevealScratch() {
@@ -699,32 +741,56 @@ function wheelOddsPct(seg, total) {
     return pct < 0.1 ? pct.toFixed(2) : (pct < 1 ? pct.toFixed(1) : Math.round(pct));
 }
 
+function wheelSegLight(hex) {
+    return hex + "cc";
+}
+
 function buildWheelSVG(totalW) {
-    const cx = 130, cy = 130, r = 125;
-    let angle = -90; // start at top
+    const cx = 130, cy = 130, rOut = 122, rIn = 34;
+    let angle = -90;
+    let defs = "<defs>";
     let paths = "";
     let labels = "";
-    WHEEL_SEGMENTS.forEach((seg) => {
+    let dividers = "";
+    let pegs = "";
+    WHEEL_SEGMENTS.forEach((seg, i) => {
+        defs += '<linearGradient id="wgrad' + i + '" x1="0%" y1="0%" x2="100%" y2="100%">' +
+            '<stop offset="0%" stop-color="' + wheelSegLight(seg.color) + '"/>' +
+            '<stop offset="100%" stop-color="' + seg.color + '"/></linearGradient>';
+    });
+    defs += "</defs>";
+    WHEEL_SEGMENTS.forEach((seg, i) => {
         const sweep = (seg.weight / totalW) * 360;
         const a0 = angle * Math.PI / 180;
         const a1 = (angle + sweep) * Math.PI / 180;
-        const x0 = cx + r * Math.cos(a0), y0 = cy + r * Math.sin(a0);
-        const x1 = cx + r * Math.cos(a1), y1 = cy + r * Math.sin(a1);
+        const x0o = cx + rOut * Math.cos(a0), y0o = cy + rOut * Math.sin(a0);
+        const x1o = cx + rOut * Math.cos(a1), y1o = cy + rOut * Math.sin(a1);
+        const x0i = cx + rIn * Math.cos(a0), y0i = cy + rIn * Math.sin(a0);
+        const x1i = cx + rIn * Math.cos(a1), y1i = cy + rIn * Math.sin(a1);
         const large = sweep > 180 ? 1 : 0;
-        paths += '<path d="M' + cx + ',' + cy + ' L' + x0.toFixed(1) + ',' + y0.toFixed(1) +
-            ' A' + r + ',' + r + ' 0 ' + large + ',1 ' + x1.toFixed(1) + ',' + y1.toFixed(1) + ' Z" fill="' + seg.color + '" stroke="#0a0418" stroke-width="2"/>';
-        // label at mid-angle (only if slice big enough)
+        paths += '<path d="M' + x0i.toFixed(1) + ',' + y0i.toFixed(1) +
+            ' L' + x0o.toFixed(1) + ',' + y0o.toFixed(1) +
+            ' A' + rOut + ',' + rOut + ' 0 ' + large + ',1 ' + x1o.toFixed(1) + ',' + y1o.toFixed(1) +
+            ' L' + x1i.toFixed(1) + ',' + y1i.toFixed(1) +
+            ' A' + rIn + ',' + rIn + ' 0 ' + large + ',0 ' + x0i.toFixed(1) + ',' + y0i.toFixed(1) + ' Z" fill="url(#wgrad' + i + ')" stroke="#0a0418" stroke-width="1.5"/>';
         const mid = (angle + sweep / 2) * Math.PI / 180;
-        const lr = r * 0.66;
+        const lr = (rOut + rIn) * 0.5;
         const lx = cx + lr * Math.cos(mid), ly = cy + lr * Math.sin(mid);
         const deg = (angle + sweep / 2);
-        if (sweep > 8) {
-            labels += '<text x="' + lx.toFixed(1) + '" y="' + ly.toFixed(1) + '" fill="#0a0418" font-size="13" font-weight="700" text-anchor="middle" dominant-baseline="middle" transform="rotate(' + deg.toFixed(1) + ' ' + lx.toFixed(1) + ' ' + ly.toFixed(1) + ')">' + seg.short + '</text>';
+        if (sweep > 7) {
+            labels += '<text x="' + lx.toFixed(1) + '" y="' + ly.toFixed(1) + '" fill="#0a0418" font-size="12" font-weight="800" text-anchor="middle" dominant-baseline="middle" transform="rotate(' + deg.toFixed(1) + ' ' + lx.toFixed(1) + ' ' + ly.toFixed(1) + ')">' + seg.short + '</text>';
         }
+        dividers += '<line x1="' + cx + '" y1="' + cy + '" x2="' + x0o.toFixed(1) + '" y2="' + y0o.toFixed(1) + '" stroke="rgba(0,0,0,0.35)" stroke-width="1.2"/>';
+        const px = cx + (rOut - 6) * Math.cos(mid), py = cy + (rOut - 6) * Math.sin(mid);
+        pegs += '<circle cx="' + px.toFixed(1) + '" cy="' + py.toFixed(1) + '" r="3.2" fill="#fff8d0" stroke="#8a6a10" stroke-width="1"/>';
         angle += sweep;
     });
-    return '<svg viewBox="0 0 260 260" id="wheel-svg" class="wheel-svg">' + paths + labels +
-        '<circle cx="130" cy="130" r="22" fill="#1a0a38" stroke="#ffd54a" stroke-width="3"/></svg>';
+    return '<svg viewBox="0 0 260 260" id="wheel-svg" class="wheel-svg">' + defs +
+        '<circle cx="' + cx + '" cy="' + cy + '" r="' + (rOut + 4) + '" fill="none" stroke="#ffd54a" stroke-width="6"/>' +
+        '<circle cx="' + cx + '" cy="' + cy + '" r="' + (rOut + 1) + '" fill="none" stroke="#1a0a38" stroke-width="2"/>' +
+        paths + dividers + pegs + labels +
+        '<circle cx="' + cx + '" cy="' + cy + '" r="' + rIn + '" fill="#1a0a38" stroke="#ffd54a" stroke-width="2.5"/>' +
+        '<circle cx="' + cx + '" cy="' + cy + '" r="10" fill="#ffd54a"/></svg>';
 }
 
 function spinWheel(fromAd) {
@@ -757,10 +823,13 @@ function spinWheel(fromAd) {
         '<span class="wheel-odd"><span class="wheel-odd-dot" style="background:' + s.color + '"></span>' + s.label + ' <b>' + wheelOddsPct(s, totalW) + '%</b></span>'
     ).join("");
 
-    const html = '<div class="wheel-stage">' +
-        '<div class="wheel-pointer">▼</div>' +
+    const html = '<div class="wheel-cabinet">' +
+        '<div class="wheel-lights"></div>' +
+        '<div class="wheel-stage">' +
+        '<div class="wheel-pointer"></div>' +
         '<div class="wheel-rotor" id="wheel-rotor">' + buildWheelSVG(totalW) + '</div>' +
-        '</div>' +
+        '<div class="wheel-cap"></div>' +
+        '</div></div>' +
         '<div class="wheel-odds-list">' + oddsList + '</div>' +
         '<p id="wheel-result" class="wheel-result">Spinning...</p>';
     openCasinoModal("🎡 Lucky Wheel", html);
