@@ -52,9 +52,16 @@ function freshCasinoState() {
         auraTaxStacks: 0,
         minesActive: false,
         minesCooldownUntil: 0,
-        crateKeys: 0
+        crateKeys: 0,
+        casinoStreak: 0,
+        lastCasinoDay: "",
+        highRoller: false,
+        minesFlags: []
     };
 }
+
+let minesFlagMode = false;
+let _crateSkipTimer = null;
 
 function chipPrice(kind) {
     const w = peakWorld();
@@ -95,7 +102,33 @@ function registerGamble() {
     c.dailyGambles++;
     c.sessionGambles++;
     c.auraTaxStacks = Math.min(8, (c.auraTaxStacks || 0) + 1);
+    const today = new Date().toDateString();
+    if (c.lastCasinoDay !== today) {
+        const yesterday = new Date(Date.now() - 86400000).toDateString();
+        if (c.lastCasinoDay === yesterday) c.casinoStreak = (c.casinoStreak || 0) + 1;
+        else c.casinoStreak = 1;
+        c.lastCasinoDay = today;
+        const bonus = Math.min(20, (c.casinoStreak || 1) * 2);
+        grantChips(bonus, "casino streak");
+        showToast("🎰 Casino streak day " + c.casinoStreak + " · +" + bonus + " chips", 2400);
+    }
     if (typeof trackStat === "function") trackStat("gambles", 1);
+}
+
+function highRollerUnlocked() {
+    return (game.rebirths || 0) >= 50 || isAdminMode();
+}
+
+function toggleHighRoller() {
+    if (!highRollerUnlocked()) { showToast("🔒 Need 50 rebirths for High-Roller Room", 2500); return; }
+    const c = ensureCasino();
+    c.highRoller = !c.highRoller;
+    if (c.highRoller && (game.aura || 0) > 0) {
+        const tax = Math.max(1, Math.floor(game.aura * 0.05));
+        game.aura = Math.max(0, game.aura - tax);
+        showToast("✦ Aura tax: -" + tax + " (better odds active)", 2800);
+    }
+    saveGame(); updateDisplay(); renderCasino();
 }
 
 function casinoPassiveMult() {
@@ -194,6 +227,12 @@ function renderCasino() {
         (c.secretShards >= 10
             ? '<button class="casino-shard-btn" onclick="redeemSecretShards()">💎 Redeem 10 Shards → Secret Pet</button>'
             : '<p class="casino-shard-hint">Jackpots drop 💎 shards · 10 = guaranteed secret pet</p>') +
+        (highRollerUnlocked()
+            ? '<button class="casino-shard-btn high-roller-card" onclick="toggleHighRoller()">' +
+              (c.highRoller ? "🎩 High-Roller ON · Aura tax active" : "🎩 Enter High-Roller Room (50+ rebirths)") +
+              '</button>'
+            : '') +
+        (c.casinoStreak > 1 ? '<div class="casino-streak-pill">🔥 Casino streak: ' + c.casinoStreak + ' days</div>' : '') +
         '<p class="casino-disclaimer">⚠️ Chips are scarce. Near-misses intentional. Gambling taxes Aura rebirth.</p>';
 }
 
@@ -275,10 +314,12 @@ function startScratchCanvas(betChips) {
     const symHtml = '<div class="scratch-sym-grid" id="scratch-sym-grid">' +
         grid.map(s => '<div class="scratch-sym">' + s + '</div>').join("") + '</div>';
 
-    const html = '<div class="scratch-outer">' + symHtml +
+    const autoCost = betChips * 2;
+    const html = '<div class="scratch-touch-pad" id="scratch-touch-pad"><div class="scratch-outer">' + symHtml +
         '<canvas id="scratch-canvas" width="320" height="240" class="scratch-foil-canvas"></canvas>' +
-        '</div>' +
-        '<p class="scratch-hint" id="scratch-hint">👆 Scratch to reveal · drag finger/mouse</p>';
+        '</div></div>' +
+        '<p class="scratch-hint" id="scratch-hint">👆 Scratch anywhere — edges are forgiving!</p>' +
+        '<div class="scratch-auto-row"><button class="casino-shard-btn" onclick="autoScratchReveal()">⚡ Auto-scratch · ' + autoCost + ' ' + chipIcon() + ' (2×)</button></div>';
     openCasinoModal("🎫 Dank Scratch", html);
     window._scratchGrid = grid;
     window._scratchBet = betChips;
@@ -320,6 +361,10 @@ function initScratchCanvas() {
 
     let scratching = false;
     let lastSampleAt = 0;
+    let lastScratch = null;
+    let activePointer = null;
+    const EDGE_PAD = 28;
+    const BRUSH = 24;
 
     function getPos(e) {
         const rect = canvas.getBoundingClientRect();
@@ -327,6 +372,13 @@ function initScratchCanvas() {
         const scaleY = canvas.height / rect.height;
         const src = (e.touches && e.touches[0]) ? e.touches[0] : e;
         return { x: (src.clientX - rect.left) * scaleX, y: (src.clientY - rect.top) * scaleY };
+    }
+
+    function clampPos(p) {
+        return {
+            x: Math.max(-EDGE_PAD, Math.min(canvas.width + EDGE_PAD, p.x)),
+            y: Math.max(-EDGE_PAD, Math.min(canvas.height + EDGE_PAD, p.y))
+        };
     }
 
     function scratchedFraction() {
@@ -345,9 +397,11 @@ function initScratchCanvas() {
     }
 
     function scratchAt(px, py) {
+        const cx = Math.max(0, Math.min(canvas.width, px));
+        const cy = Math.max(0, Math.min(canvas.height, py));
         ctx.globalCompositeOperation = "destination-out";
         ctx.beginPath();
-        ctx.arc(px, py, 20, 0, Math.PI * 2);
+        ctx.arc(cx, cy, BRUSH, 0, Math.PI * 2);
         ctx.fill();
         ctx.globalCompositeOperation = "source-over";
         const now = Date.now();
@@ -360,19 +414,48 @@ function initScratchCanvas() {
         }
     }
 
-    function onStart(e) { e.preventDefault(); scratching = true; const p = getPos(e); scratchAt(p.x, p.y); }
-    function onMove(e) { e.preventDefault(); if (scratching) { const p = getPos(e); scratchAt(p.x, p.y); } }
-    function onEnd() { scratching = false; if (!window._scratchDone && scratchedFraction() >= 0.8) autoRevealScratch(); }
+    function scratchLine(a, b) {
+        const dx = b.x - a.x, dy = b.y - a.y;
+        const dist = Math.hypot(dx, dy);
+        const steps = Math.max(1, Math.ceil(dist / 10));
+        for (let i = 0; i <= steps; i++) {
+            scratchAt(a.x + dx * i / steps, a.y + dy * i / steps);
+        }
+    }
 
-    canvas.addEventListener("pointerdown", onStart);
-    canvas.addEventListener("pointermove", onMove);
-    canvas.addEventListener("pointerup", onEnd);
-    canvas.addEventListener("pointerleave", onEnd);
-    canvas.addEventListener("touchstart", onStart, { passive: false });
-    canvas.addEventListener("touchmove", onMove, { passive: false });
-    canvas.addEventListener("touchend", onEnd);
+    function onStart(e) {
+        e.preventDefault();
+        scratching = true;
+        activePointer = e.pointerId;
+        try { canvas.setPointerCapture(e.pointerId); } catch (err) {}
+        const p = clampPos(getPos(e));
+        lastScratch = p;
+        scratchAt(p.x, p.y);
+    }
+    function onMove(e) {
+        if (!scratching || (activePointer != null && e.pointerId !== activePointer)) return;
+        e.preventDefault();
+        const p = clampPos(getPos(e));
+        if (lastScratch) scratchLine(lastScratch, p);
+        else scratchAt(p.x, p.y);
+        lastScratch = p;
+    }
+    function onEnd(e) {
+        if (activePointer != null && e && e.pointerId !== activePointer) return;
+        scratching = false;
+        lastScratch = null;
+        activePointer = null;
+        try { if (e) canvas.releasePointerCapture(e.pointerId); } catch (err) {}
+        if (!window._scratchDone && scratchedFraction() >= 0.8) autoRevealScratch();
+    }
 
-    window._scratchCleanup = () => { scratching = false; };
+    const pad = document.getElementById("scratch-touch-pad") || canvas;
+    pad.addEventListener("pointerdown", onStart);
+    pad.addEventListener("pointermove", onMove);
+    pad.addEventListener("pointerup", onEnd);
+    pad.addEventListener("pointercancel", onEnd);
+
+    window._scratchCleanup = () => { scratching = false; lastScratch = null; activePointer = null; };
 }
 
 function autoRevealScratch() {
@@ -392,6 +475,8 @@ function autoRevealScratch() {
     if (win) {
         resolveScratchJackpot(hint);
     } else if (near) {
+        const grid = document.getElementById("scratch-sym-grid");
+        if (grid) grid.classList.add("near-miss");
         if (hint) hint.textContent = "😭 SO CLOSE — 3 in a row but not 4!";
         showToast("Near miss! The foil knew.", 2800);
         screenFlash("#ff3d9a");
@@ -403,6 +488,19 @@ function autoRevealScratch() {
         saveGame(); updateDisplay();
         casinoDefer(sess, closeCasinoModal, 2400);
     }
+}
+
+function autoScratchReveal() {
+    if (window._scratchDone) return;
+    const cost = (window._scratchBet || chipPrice("scratch")) * 2;
+    if (!spendChips(cost)) { sfxError(); showToast("Need " + cost + " chips for auto-scratch!", 2000); return; }
+    const canvas = document.getElementById("scratch-canvas");
+    if (canvas) {
+        const ctx = canvas.getContext("2d");
+        ctx.globalCompositeOperation = "destination-out";
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+    }
+    autoRevealScratch();
 }
 
 function resolveScratchJackpot(hint) {
@@ -451,20 +549,32 @@ function startMines() {
     const mineSet = new Set();
     while (mineSet.size < mines) mineSet.add(Math.floor(Math.random() * cells));
     c.minesState = { size, mines: mineSet, revealed: [], mult: 1, bet: cost, alive: true };
+    c.minesFlags = [];
+    minesFlagMode = false;
     saveGame(); updateDisplay();
+    renderMinesBoard();
+}
+
+function toggleMinesFlagMode() {
+    minesFlagMode = !minesFlagMode;
     renderMinesBoard();
 }
 
 function renderMinesBoard() {
     const st = ensureCasino().minesState;
     if (!st) return;
-    let html = '<div class="mines-hud">Mult: <b id="mines-mult">x' + st.mult.toFixed(2) + '</b> · Mines: ' + st.mines.size + '</div>' +
+    const flags = ensureCasino().minesFlags || [];
+    let html = '<div class="mines-flag-bar">' +
+        '<button class="' + (minesFlagMode ? "active" : "") + '" onclick="toggleMinesFlagMode()">🚩 Flag mode' + (minesFlagMode ? " ON" : "") + '</button>' +
+        '<span class="meta-hint">Tap tiles to place flags</span></div>' +
+        '<div class="mines-hud">Mult: <b id="mines-mult">x' + st.mult.toFixed(2) + '</b> · Mines: ' + st.mines.size + '</div>' +
         '<div class="mines-grid">';
     for (let i = 0; i < st.size * st.size; i++) {
         const rev = st.revealed.indexOf(i) >= 0;
+        const flagged = flags.indexOf(i) >= 0;
         const isMine = st.mines.has(i);
-        let inner = "?";
-        let cls = "mine-tile";
+        let inner = flagged ? "" : "?";
+        let cls = "mine-tile" + (flagged ? " flagged" : "");
         if (rev) {
             cls += isMine ? " boom" : " safe";
             inner = isMine ? "💣" : "💎";
@@ -479,6 +589,14 @@ function pickMine(i) {
     const c = ensureCasino();
     const st = c.minesState;
     if (!st || !st.alive || st.revealed.indexOf(i) >= 0) return;
+    if (minesFlagMode) {
+        c.minesFlags = c.minesFlags || [];
+        const idx = c.minesFlags.indexOf(i);
+        if (idx >= 0) c.minesFlags.splice(idx, 1);
+        else c.minesFlags.push(i);
+        renderMinesBoard();
+        return;
+    }
     st.revealed.push(i);
     if (st.mines.has(i)) {
         st.alive = false;
@@ -538,9 +656,11 @@ function openCrate() {
     const won = rollCrateItem(false);
     const near = won.tier < 5 && Math.random() < 0.34;
     const strip = buildCrateStrip(won, near);
+    window._cratePendingWin = won;
     const html = '<div class="crate-stage">📦</div>' +
         '<div class="crate-viewport"><div class="crate-marker"></div><div class="crate-strip" id="crate-strip"></div></div>' +
-        '<p class="crate-status" id="crate-status">Opening...</p>';
+        '<p class="crate-status" id="crate-status">Opening...</p>' +
+        '<button class="crate-skip-btn" onclick="skipCrateAnimation()">⏭ Skip to result</button>';
     openCasinoModal("📦 Brainrot Crate", html);
     const stripEl = document.getElementById("crate-strip");
     stripEl.innerHTML = strip.map(it =>
@@ -548,7 +668,17 @@ function openCrate() {
     ).join("");
     animateCrateStrip(stripEl, 28, 5.5);
     sfxWhoosh();
-    casinoDefer(casinoSession, () => resolveCrateWin(won), 5600);
+    if (_crateSkipTimer) clearTimeout(_crateSkipTimer);
+    _crateSkipTimer = setTimeout(() => { _crateSkipTimer = null; resolveCrateWin(won); }, 5600);
+}
+
+function skipCrateAnimation() {
+    const won = window._cratePendingWin;
+    if (!won) return;
+    if (_crateSkipTimer) { clearTimeout(_crateSkipTimer); _crateSkipTimer = null; }
+    const stripEl = document.getElementById("crate-strip");
+    if (stripEl) { stripEl.style.transition = "none"; }
+    resolveCrateWin(won);
 }
 
 function animateCrateStrip(stripEl, winIdx, durationSec) {
@@ -569,13 +699,16 @@ function animateCrateStrip(stripEl, winIdx, durationSec) {
 
 function rollCrateItem(forceGod) {
     if (forceGod) return CRATE_TABLE[5];
-    const total = CRATE_TABLE.reduce((s, x) => s + x.weight, 0);
+    const table = ensureCasino().highRoller
+        ? CRATE_TABLE.map((it, i) => i >= 2 ? Object.assign({}, it, { weight: it.weight * (i >= 4 ? 2.5 : 1.6) }) : it)
+        : CRATE_TABLE;
+    const total = table.reduce((s, x) => s + x.weight, 0);
     let roll = Math.random() * total;
-    for (const it of CRATE_TABLE) {
+    for (const it of table) {
         roll -= it.weight;
         if (roll <= 0) return it;
     }
-    return CRATE_TABLE[0];
+    return table[0];
 }
 
 function buildCrateStrip(won, nearMiss) {
@@ -699,32 +832,56 @@ function wheelOddsPct(seg, total) {
     return pct < 0.1 ? pct.toFixed(2) : (pct < 1 ? pct.toFixed(1) : Math.round(pct));
 }
 
+function wheelSegLight(hex) {
+    return hex + "cc";
+}
+
 function buildWheelSVG(totalW) {
-    const cx = 130, cy = 130, r = 125;
-    let angle = -90; // start at top
+    const cx = 130, cy = 130, rOut = 122, rIn = 34;
+    let angle = -90;
+    let defs = "<defs>";
     let paths = "";
     let labels = "";
-    WHEEL_SEGMENTS.forEach((seg) => {
+    let dividers = "";
+    let pegs = "";
+    WHEEL_SEGMENTS.forEach((seg, i) => {
+        defs += '<linearGradient id="wgrad' + i + '" x1="0%" y1="0%" x2="100%" y2="100%">' +
+            '<stop offset="0%" stop-color="' + wheelSegLight(seg.color) + '"/>' +
+            '<stop offset="100%" stop-color="' + seg.color + '"/></linearGradient>';
+    });
+    defs += "</defs>";
+    WHEEL_SEGMENTS.forEach((seg, i) => {
         const sweep = (seg.weight / totalW) * 360;
         const a0 = angle * Math.PI / 180;
         const a1 = (angle + sweep) * Math.PI / 180;
-        const x0 = cx + r * Math.cos(a0), y0 = cy + r * Math.sin(a0);
-        const x1 = cx + r * Math.cos(a1), y1 = cy + r * Math.sin(a1);
+        const x0o = cx + rOut * Math.cos(a0), y0o = cy + rOut * Math.sin(a0);
+        const x1o = cx + rOut * Math.cos(a1), y1o = cy + rOut * Math.sin(a1);
+        const x0i = cx + rIn * Math.cos(a0), y0i = cy + rIn * Math.sin(a0);
+        const x1i = cx + rIn * Math.cos(a1), y1i = cy + rIn * Math.sin(a1);
         const large = sweep > 180 ? 1 : 0;
-        paths += '<path d="M' + cx + ',' + cy + ' L' + x0.toFixed(1) + ',' + y0.toFixed(1) +
-            ' A' + r + ',' + r + ' 0 ' + large + ',1 ' + x1.toFixed(1) + ',' + y1.toFixed(1) + ' Z" fill="' + seg.color + '" stroke="#0a0418" stroke-width="2"/>';
-        // label at mid-angle (only if slice big enough)
+        paths += '<path d="M' + x0i.toFixed(1) + ',' + y0i.toFixed(1) +
+            ' L' + x0o.toFixed(1) + ',' + y0o.toFixed(1) +
+            ' A' + rOut + ',' + rOut + ' 0 ' + large + ',1 ' + x1o.toFixed(1) + ',' + y1o.toFixed(1) +
+            ' L' + x1i.toFixed(1) + ',' + y1i.toFixed(1) +
+            ' A' + rIn + ',' + rIn + ' 0 ' + large + ',0 ' + x0i.toFixed(1) + ',' + y0i.toFixed(1) + ' Z" fill="url(#wgrad' + i + ')" stroke="#0a0418" stroke-width="1.5"/>';
         const mid = (angle + sweep / 2) * Math.PI / 180;
-        const lr = r * 0.66;
+        const lr = (rOut + rIn) * 0.5;
         const lx = cx + lr * Math.cos(mid), ly = cy + lr * Math.sin(mid);
         const deg = (angle + sweep / 2);
-        if (sweep > 8) {
-            labels += '<text x="' + lx.toFixed(1) + '" y="' + ly.toFixed(1) + '" fill="#0a0418" font-size="13" font-weight="700" text-anchor="middle" dominant-baseline="middle" transform="rotate(' + deg.toFixed(1) + ' ' + lx.toFixed(1) + ' ' + ly.toFixed(1) + ')">' + seg.short + '</text>';
+        if (sweep > 7) {
+            labels += '<text x="' + lx.toFixed(1) + '" y="' + ly.toFixed(1) + '" fill="#0a0418" font-size="12" font-weight="800" text-anchor="middle" dominant-baseline="middle" transform="rotate(' + deg.toFixed(1) + ' ' + lx.toFixed(1) + ' ' + ly.toFixed(1) + ')">' + seg.short + '</text>';
         }
+        dividers += '<line x1="' + cx + '" y1="' + cy + '" x2="' + x0o.toFixed(1) + '" y2="' + y0o.toFixed(1) + '" stroke="rgba(0,0,0,0.35)" stroke-width="1.2"/>';
+        const px = cx + (rOut - 6) * Math.cos(mid), py = cy + (rOut - 6) * Math.sin(mid);
+        pegs += '<circle cx="' + px.toFixed(1) + '" cy="' + py.toFixed(1) + '" r="3.2" fill="#fff8d0" stroke="#8a6a10" stroke-width="1"/>';
         angle += sweep;
     });
-    return '<svg viewBox="0 0 260 260" id="wheel-svg" class="wheel-svg">' + paths + labels +
-        '<circle cx="130" cy="130" r="22" fill="#1a0a38" stroke="#ffd54a" stroke-width="3"/></svg>';
+    return '<svg viewBox="0 0 260 260" id="wheel-svg" class="wheel-svg">' + defs +
+        '<circle cx="' + cx + '" cy="' + cy + '" r="' + (rOut + 4) + '" fill="none" stroke="#ffd54a" stroke-width="6"/>' +
+        '<circle cx="' + cx + '" cy="' + cy + '" r="' + (rOut + 1) + '" fill="none" stroke="#1a0a38" stroke-width="2"/>' +
+        paths + dividers + pegs + labels +
+        '<circle cx="' + cx + '" cy="' + cy + '" r="' + rIn + '" fill="#1a0a38" stroke="#ffd54a" stroke-width="2.5"/>' +
+        '<circle cx="' + cx + '" cy="' + cy + '" r="10" fill="#ffd54a"/></svg>';
 }
 
 function spinWheel(fromAd) {
@@ -757,10 +914,13 @@ function spinWheel(fromAd) {
         '<span class="wheel-odd"><span class="wheel-odd-dot" style="background:' + s.color + '"></span>' + s.label + ' <b>' + wheelOddsPct(s, totalW) + '%</b></span>'
     ).join("");
 
-    const html = '<div class="wheel-stage">' +
-        '<div class="wheel-pointer">▼</div>' +
+    const html = '<div class="wheel-cabinet">' +
+        '<div class="wheel-lights"></div>' +
+        '<div class="wheel-stage">' +
+        '<div class="wheel-pointer"></div>' +
         '<div class="wheel-rotor" id="wheel-rotor">' + buildWheelSVG(totalW) + '</div>' +
-        '</div>' +
+        '<div class="wheel-cap"></div>' +
+        '</div></div>' +
         '<div class="wheel-odds-list">' + oddsList + '</div>' +
         '<p id="wheel-result" class="wheel-result">Spinning...</p>';
     openCasinoModal("🎡 Lucky Wheel", html);

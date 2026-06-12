@@ -17,7 +17,7 @@ function freshMetaState() {
         ascension: 0,
         ascensionMutator: null,
         garden: { plots: [], unlocked: false },
-        stocks: { holdings: { SKIB: 0, RIZZ: 0, STINK: 0 }, prices: { SKIB: 42, RIZZ: 88, STINK: 12 }, lastTick: 0 },
+        stocks: { holdings: { SKIB: 0, RIZZ: 0, STINK: 0 }, prices: { SKIB: 42, RIZZ: 88, STINK: 12 }, lastTick: 0, history: [] },
         quests: { daily: [], weekly: [], lastDaily: "", lastWeekly: "", tokens: 0 },
         petJobs: {},
         secrets: { konami: false, secretWorld: false, foundHidden: {} },
@@ -35,6 +35,7 @@ function ensureMeta() {
     if (!m.buildings) m.buildings = {};
     if (!m.garden) m.garden = { plots: [], unlocked: false };
     if (!m.stocks) m.stocks = freshMetaState().stocks;
+    if (!m.stocks.history) m.stocks.history = [];
     if (!m.quests) m.quests = { daily: [], weekly: [], lastDaily: "", lastWeekly: "", tokens: 0 };
     if (!m.petJobs) m.petJobs = {};
     if (!m.secrets) m.secrets = freshMetaState().secrets;
@@ -277,6 +278,9 @@ function renderBuildingsTab() {
         const ok = (m.buildings[s.id] || 0) >= s.count;
         html += '<div class="synergy-row ' + (ok ? "active" : "") + '">' + s.label + (ok ? " ✓" : "") + '</div>';
     });
+    if (typeof ensureFeatures === "function") ensureFeatures();
+    const mgr = (typeof ensureFeatures === "function" ? ensureFeatures().buildingManagers : {}) || {};
+    html += '<p class="meta-hint">👔 Building managers auto-buy when you can afford.</p>';
     BUILDINGS.forEach(b => {
         const owned = m.buildings[b.id] || 0;
         const locked = peakWorld() < b.reqWorld;
@@ -284,6 +288,9 @@ function renderBuildingsTab() {
         const bm = (typeof buyMode !== "undefined") ? buyMode : 1;
         const bmArg = bm === "max" ? "'max'" : bm;
         const bmLabel = bm === "max" ? "MAX" : ("x" + bm);
+        const mgrOn = !!mgr[b.id];
+        html += '<div class="building-mgr-row ' + (mgrOn ? "on" : "") + '"><span>' + b.icon + ' ' + b.name + ' mgr</span>' +
+            '<button class="meta-btn small" onclick="toggleBuildingManager(\'' + b.id + '\')">' + (mgrOn ? "ON" : "OFF") + '</button></div>';
         html += '<button class="up-card ' + (locked ? "locked" : "") + '" onclick="buyBuilding(\'' + b.id + '\',' + bmArg + ')">' +
             '<span class="up-ico">' + b.icon + '</span><div class="up-mid"><div class="up-name">' + b.name + ' <span class="buy-badge">' + bmLabel + '</span></div>' +
             '<div class="up-stat">+' + b.baseProd + '/s each · own ' + owned + '</div>' +
@@ -354,6 +361,7 @@ function renderAscension() {
         const cur = ASCENSION_MUTATORS.find(x => x.id === m.ascensionMutator);
         if (cur) html += '<p class="meta-ok">Active: <b>' + cur.name + '</b></p>';
     }
+    html += '<button class="meta-btn" onclick="rerollAscensionMutator()">🎲 Reroll next mutator (5 quest tokens)</button>';
     el.innerHTML = html;
 }
 
@@ -422,8 +430,9 @@ function renderGarden() {
     GARDEN_SEEDS.forEach(s => {
         html += '<button class="garden-seed-btn" onclick="plantGardenNextEmpty(\'' + s.id + '\')">' + s.icon + " " + s.name + '</button>';
     });
-    html += '</div>';
+    html += '</div><div id="garden-chart"></div>';
     el.innerHTML = html;
+    if (typeof renderGardenChart === "function") renderGardenChart();
 }
 
 function plantGardenNextEmpty(seedId) {
@@ -453,6 +462,8 @@ function tickStocks() {
             m.stocks.prices[t] = Math.max(1, m.stocks.prices[t] * (1 + shock));
         }
     });
+    const avg = STOCK_TICKERS.reduce((s, t) => s + m.stocks.prices[t], 0) / STOCK_TICKERS.length;
+    m.stocks.history = (m.stocks.history || []).concat(avg).slice(-40);
 }
 
 function buyStock(ticker, amt) {
@@ -495,9 +506,11 @@ function renderStocks() {
             '<button onclick="buyStock(\'' + t + '\',1)">Buy</button>' +
             '<button onclick="sellStock(\'' + t + '\',1)">Sell</button></div>';
     });
+    html += '<div id="stock-sparkline"></div>';
     html += '<button class="meta-btn danger" onclick="sellAllStocksPanic()">💀 PANIC SELL ALL</button>';
     html += '<button class="meta-btn danger" onclick="declareBankruptcy()">📉 Declare Bankruptcy</button>';
     el.innerHTML = html;
+    if (typeof renderStockSparkline === "function") renderStockSparkline();
 }
 
 function declareBankruptcy() {
@@ -746,6 +759,7 @@ function invasionClick(dmg) {
         game.points += reward;
         grantChips(5 + brainrotLevel(), "invasion");
         trackStat("invasionWins", 1);
+        if (typeof recordInvasionScore === "function") recordInvasionScore(reward);
         m.invasion = null;
         m.invasionEnded = Date.now();
         showToast("🛡️ Invasion repelled! +" + fmt(reward), 3000);
@@ -769,6 +783,7 @@ function renderInvasionHud() {
 }
 
 function renderInvasion() {
+    if (typeof renderInvasionLeaderboard === "function") return renderInvasionLeaderboard();
     const el = document.getElementById("hub-invasion");
     if (!el) return;
     const inv = ensureMeta().invasion;
@@ -816,7 +831,7 @@ function renderStats() {
         ["Wheel spins", m.stats.wheelSpins], ["Garden harvests", m.stats.gardenHarvests]
     ];
     rows.forEach(r => { html += '<div class="stat-row"><span>' + r[0] + '</span><b>' + r[1] + '</b></div>'; });
-    html += '</div><button class="meta-btn" onclick="exportPhotoCard()">📸 Photo Card (last hatch)</button>';
+    html += '</div><button class="meta-btn" onclick="(typeof exportPhotoCardEnhanced===\'function\'?exportPhotoCardEnhanced:exportPhotoCard)()">📸 Photo Card (last hatch)</button>';
     el.innerHTML = html;
 }
 
@@ -907,6 +922,8 @@ function showHubTab(name, btn) {
     if (name === "ascension") renderAscension();
     if (name === "stats") renderStats();
     if (name === "invasion") renderInvasion();
+    if (name === "season" && typeof renderSeasonPass === "function") renderSeasonPass();
+    if (typeof updateHubNavBadge === "function") updateHubNavBadge();
 }
 
 function renderHub() { showHubTab("achievements", document.querySelector("#sheet-hub .hstab")); }
@@ -942,7 +959,6 @@ function initMeta() {
             toilet.className = "toilet-secret-btn hidden";
             toilet.textContent = "🚽";
             toilet.title = "???";
-            toilet.onclick = (e) => { e.stopPropagation(); onToiletClick(); showToast("Skibidi...", 1200); };
             zone.appendChild(toilet);
         }
     }

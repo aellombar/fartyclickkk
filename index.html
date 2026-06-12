@@ -44,6 +44,7 @@
         </header>
 
         <div class="stats-panel">
+            <div id="hud-compact-line" class="hud-compact-line hidden"></div>
             <div class="stat-hero">
                 <span id="points" class="hero-value">0</span>
                 <span class="hero-label">STINK 💨</span>
@@ -64,6 +65,7 @@
         </div>
 
         <div class="clicker-zone">
+            <div id="showcase-pet" class="showcase-pet hidden"></div>
             <div class="combo-wrap">
                 <div class="combo-track"><div id="combo-bar"></div></div>
                 <span id="combo-label">COMBO x1.0</span>
@@ -74,7 +76,9 @@
             </button>
         </div>
 
-        <button onclick="rebirth()" id="rebirth-btn" class="rebirth-btn">🔄 REBIRTH<span id="asc-badge" class="asc-badge hidden"></span><span id="rebirth-cost" class="rb-cost">1M 💨</span></button>
+        <div class="game-footer">
+            <button id="rebirth-btn" class="rebirth-btn rebirth-pill" onclick="handleRebirthTap(event)">🔄 REBIRTH<span id="asc-badge" class="asc-badge hidden"></span><span id="rebirth-cost" class="rb-cost">1M 💨</span></button>
+        </div>
     </div>
 
     <nav class="bottom-nav">
@@ -121,6 +125,7 @@
             <button class="stab" onclick="showPetTab('fuse', this)">✨ Fuse</button>
             <button class="stab" onclick="showPetTab('index', this)">📖 Index</button>
             <button class="stab" onclick="showPetTab('jobs', this)">💼 Jobs</button>
+            <button class="stab" onclick="showPetTab('teams', this)">👥 Teams</button>
         </div>
         <div class="sheet-body" id="pets-body"></div>
     </div>
@@ -148,6 +153,7 @@
             <button class="hstab" onclick="showHubTab('ascension', this)">☄</button>
             <button class="hstab" onclick="showHubTab('stats', this)">📊</button>
             <button class="hstab" onclick="showHubTab('invasion', this)">🚨</button>
+            <button class="hstab" onclick="showHubTab('season', this)">🎫</button>
         </div>
         <div class="sheet-body hub-body">
             <div id="hub-achievements" class="hub-tab active"></div>
@@ -157,6 +163,7 @@
             <div id="hub-ascension" class="hub-tab"></div>
             <div id="hub-stats" class="hub-tab"></div>
             <div id="hub-invasion" class="hub-tab"></div>
+            <div id="hub-season" class="hub-tab"></div>
         </div>
     </div>
 
@@ -194,6 +201,13 @@
                 <button class="toggle-row" id="tg-particles" onclick="toggleSetting('particles', this)"><span>✨ Particles</span><span class="toggle-pill">ON</span></button>
                 <button class="toggle-row" id="tg-shake" onclick="toggleSetting('screenShake', this)"><span>📳 Screen Shake</span><span class="toggle-pill">ON</span></button>
                 <button class="toggle-row" id="tg-brainrot" onclick="toggleSetting('brainrot', this)"><span>🧠 Brainrot Mode</span><span class="toggle-pill">ON</span></button>
+                <button class="toggle-row" id="tg-compact" onclick="toggleCompactHud(this)"><span>📐 Compact HUD</span><span class="toggle-pill">OFF</span></button>
+                <button class="toggle-row" id="tg-haptics" onclick="toggleSetting('haptics', this)"><span>📳 Haptic tap</span><span class="toggle-pill">OFF</span></button>
+                <button class="toggle-row" id="tg-lite-particles" onclick="toggleLiteParticles(this)"><span>✨ Lite particles</span><span class="toggle-pill">OFF</span></button>
+            </div>
+            <div class="set-group">
+                <label class="set-row"><span>🔍 UI scale</span><span id="ui-scale-val" class="set-val">100%</span></label>
+                <input type="range" id="ui-scale" min="90" max="110" value="100" class="slider" oninput="setUiScale(this.value)">
             </div>
             <div class="set-group code-group">
                 <label class="set-row"><span>🎁 Codes</span><span class="set-val">Rewards</span></label>
@@ -242,10 +256,20 @@
         <div class="modal-content pet-modal-content">
             <button class="close-btn" onclick="closePetModal()">&times;</button>
             <div id="pet-details"></div>
+            <div id="pet-nickname-row" class="pet-nickname-row"></div>
             <div class="modal-actions">
                 <button id="equip-btn" class="modal-btn" onclick="equipPet()">Equip</button>
                 <button class="modal-btn secondary" onclick="closePetModal()">Close</button>
             </div>
+        </div>
+    </div>
+
+    <!-- Daily Login Modal -->
+    <div id="daily-login-modal" class="modal hidden">
+        <div class="modal-content daily-login-content">
+            <h2>🎁 Daily Login</h2>
+            <div id="daily-login-body"></div>
+            <button class="modal-btn secondary" onclick="document.getElementById('daily-login-modal').classList.add('hidden')">Close</button>
         </div>
     </div>
 
@@ -264,5 +288,6 @@
     <script src="script.js"></script>
     <script src="casino.js"></script>
     <script src="meta.js"></script>
+    <script src="features.js"></script>
 </body>
 </html>
