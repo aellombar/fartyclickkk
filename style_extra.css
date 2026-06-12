@@ -268,7 +268,8 @@
 .egg-card,
 .up-card,
 .aura-card {
-    transform: translateZ(0);
+    backface-visibility: hidden;
+    will-change: transform;
 }
 
 .stats-panel {
