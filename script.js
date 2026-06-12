@@ -99,50 +99,56 @@ function fmt(num) {
     return (num / Math.pow(1000, t)).toFixed(2).replace(/\.?0+$/, '') + u[t - 1];
 }
 
-// ---------- Generated brainrot image icons ----------
+// ---------- Icon atlas (121 unique transparent icons) ----------
+const ICON_ATLAS = { cols: 12, rows: 11, cell: 128 };
 const ICON_BY_EMOJI = {
-    "💨":0, "🚽":0, "🚿":0, "🪠":0, "🪣":0,
-    "☣️":1, "🤢":1, "🟢":1, "💚":1, "🌿":1, "🍄":1,
-    "🥚":2, "🟤":2, "🌟":2, "✨":2, "⭐":2, "💫":2,
-    "🐸":3, "🐌":3, "🪲":3, "🐛":3,
-    "🗿":4, "😤":4, "💪":4, "🏋️":4,
-    "😎":5, "😏":5, "💅":5, "💞":5, "👟":5,
-    "🐀":6, "🐭":6, "🐿️":6, "🦊":6,
-    "🐍":7, "🐉":7, "🐲":7, "🦎":7, "🐊":7,
-    "👻":8, "👾":8, "💀":8, "🧟":8,
-    "🐺":9, "🐕":9, "🐾":9, "😺":9, "🐈":9, "🐰":9, "🐶":9,
-    "🌽":10, "🌾":10, "🌰":10, "🏆":10,
-    "🔥":11, "💥":11, "⚡":11, "🌪️":11,
-    "👑":12, "🔱":12, "🧙":12, "🥋":12,
-    "🕳️":13, "🌀":13, "🚀":13, "🌌":13, "🛸":13, "⚛️":13, "🪐":13,
-    "💎":14, "🔷":14, "🔮":14, "🪞":14,
-    "✦":15, "💰":15, "🌈":15, "♾️":15
+    "💨":0, "🛒":1, "🐾":2, "🌍":3, "✦":4, "🚽":5, "🥚":6, "👑":7, "•":8,
+    "⏳":9, "☁️":10, "☢️":11, "☣️":12, "♾️":13, "⚛️":14, "⚡":15, "✨":16, "⭐":17,
+    "🌀":18, "🌊":19, "🌌":20, "🌟":21, "🌪️":22, "🌬️":23, "🌮":24, "🌰":25, "🌱":26,
+    "🌽":27, "🌾":28, "🌿":29, "🍀":30, "🍄":31, "🍈":32, "🍑":33, "🍔":34, "🏆":35,
+    "🏇":36, "🏋️":37, "🏙️":38, "🏚️":39, "🏜️":40, "🏭":41, "🐀":42, "🐉":43, "🐊":44,
+    "🐌":45, "🐍":46, "🐕":47, "🐣":48, "🐭":49, "🐰":50, "🐲":51, "🐸":52, "🐺":53,
+    "👁️":54, "👟":55, "👹":56, "👺":57, "👻":58, "👾":59, "💀":60, "💅":61, "💎":62,
+    "💚":63, "💜":64, "💞":65, "💥":66, "💩":67, "💪":68, "💫":69, "💻":70, "📡":71,
+    "📴":72, "🔄":73, "🔥":74, "🔧":75, "🔬":76, "🔮":77, "🔯":78, "🔱":79, "🔷":80,
+    "🕊️":81, "🕰️":82, "🕳️":83, "🗣️":84, "🗿":85, "😇":86, "😈":87, "😎":88, "😏":89,
+    "😐":90, "😤":91, "😰":92, "😶":93, "😺":94, "🚀":95, "🚿":96, "🛸":97, "🟢":98,
+    "🟣":99, "🟤":100, "🤔":101, "🤖":102, "🤢":103, "🥋":104, "🥬":105, "🦀":106,
+    "🦁":107, "🦊":108, "🦌":109, "🦎":110, "🧙":111, "🧛":112, "🧟":113, "🧲":114,
+    "🪐":115, "🪞":116, "🪠":117, "🪣":118, "🪲":119, "🪺":120
 };
-function iconIndex(value, kind) {
-    if (kind === "secret") return 15;
-    if (kind === "mythic") return 13;
-    if (kind === "legendary") return 12;
-    if (kind === "epic") return 5;
-    if (kind === "rare") return 3;
-    if (kind === "common") return 0;
-    if (kind === "golden" || kind === "legendaryEgg") return 2;
-    if (ICON_BY_EMOJI[value] !== undefined) return ICON_BY_EMOJI[value];
-    return 0;
+function iconIndex(value) {
+    if (value && ICON_BY_EMOJI[value] !== undefined) return ICON_BY_EMOJI[value];
+    return ICON_BY_EMOJI["💨"];
 }
 function escAttr(s) {
     return String(s || "").replace(/[&<>"']/g, ch => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#39;" }[ch]));
 }
-function iconHTML(value, cls, label, kind) {
-    const idx = iconIndex(value, kind);
-    return '<span class="asset-icon asset-i-' + idx + (cls ? ' ' + cls : '') + '" role="img" aria-label="' + escAttr(label || value || "icon") + '"></span>';
+function iconHTML(value, cls, label) {
+    const idx = iconIndex(value);
+    const col = idx % ICON_ATLAS.cols;
+    const row = Math.floor(idx / ICON_ATLAS.cols);
+    return '<span class="game-icon' + (cls ? ' ' + cls : '') + '" style="--ix:' + col + ';--iy:' + row + '" role="img" aria-label="' + escAttr(label || value || "icon") + '"></span>';
 }
-function iconOrTextHTML(value, cls, label, kind) {
-    if (ICON_BY_EMOJI[value] !== undefined || kind) return iconHTML(value, cls, label, kind);
+function iconOrTextHTML(value, cls, label) {
+    if (ICON_BY_EMOJI[value] !== undefined) return iconHTML(value, cls, label);
     return escAttr(value || "");
 }
-function setIconNode(el, value, cls, label, kind) {
+function setIconNode(el, value, cls, label) {
     if (!el) return;
-    el.innerHTML = iconOrTextHTML(value, cls, label, kind);
+    el.innerHTML = iconOrTextHTML(value, cls, label);
+}
+function applyChromeIcons() {
+    const logo = document.querySelector(".logo-mini .logo-icon-img");
+    if (logo) logo.outerHTML = iconHTML("💨", "logo-icon-img", "Fart Clicker");
+    const main = document.querySelector(".main-icon-img");
+    if (main) main.outerHTML = iconHTML("💨", "main-icon-img", "Click");
+    const offline = document.querySelector(".offline-icon-img");
+    if (offline) offline.outerHTML = iconHTML("💨", "offline-icon-img", "Offline stink");
+    [["upgrades","🛒"],["pets","🐾"],["worlds","🌍"],["aura","✦"]].forEach(([sheet, emoji]) => {
+        const wrap = document.querySelector('.nav-btn[data-sheet="' + sheet + '"] .nav-ico');
+        if (wrap) wrap.innerHTML = iconHTML(emoji, "nav-icon-img", sheet);
+    });
 }
 
 
@@ -1175,7 +1181,7 @@ function upCard(i) {
     const stat = u.type === "click" ? "+" + fmt(u.clickPower) + " / click" : "+" + fmt(u.passivePower) + " / sec";
     const buyLabel = (buyMode === "max") ? ("MAX (" + (info.count||0) + ")") : ("x" + buyMode);
     return '<button class="up-card ' + (ok ? "" : "locked") + '" onclick="buyUpgrade(' + i + ')">' +
-        '<div class="up-ico">' + iconHTML(u.icon, "up-ico-img", u.name, u.type) + '</div>' +
+        '<div class="up-ico">' + iconHTML(u.icon, "up-ico-img", u.name) + '</div>' +
         '<div class="up-mid"><div class="up-name">' + u.name + ' <span class="buy-badge">' + buyLabel + '</span></div>' +
         '<div class="up-stat">' + stat + '</div><div class="up-cost">' + fmt(info.total) + ' 💨</div></div>' +
         '<div class="up-lvl">Lv ' + lvl + '</div></button>';
@@ -1189,7 +1195,7 @@ function renderUpgradeTabs() {
         const ok = game.points >= u.cost && !lockedRb;
         const sub = lockedRb ? ('🔒 Needs ' + u.reqRebirths + ' rebirths') : 'Equip one more pet';
         s += '<button class="up-card ' + (ok ? "" : "locked") + '" onclick="buyPetSlot(' + idx + ')">' +
-            '<div class="up-ico">' + iconHTML("🐾", "up-ico-img", "Pet Slot", "legendary") + '</div><div class="up-mid"><div class="up-name">Pet Slot ' + u.slot + '</div>' +
+            '<div class="up-ico">' + iconHTML("🐾", "up-ico-img", "Pet Slot") + '</div><div class="up-mid"><div class="up-name">Pet Slot ' + u.slot + '</div>' +
             '<div class="up-stat">' + sub + '</div><div class="up-cost">' + fmt(u.cost) + ' 💨</div></div></button>';
     });
     if (!s) s = '<p class="empty-text">All pet slots unlocked! 🎉</p>';
@@ -1401,7 +1407,7 @@ function renderWorlds() {
     WORLDS.forEach((w, i) => {
         const unlocked = game.rebirths >= w.reqRebirths, current = game.worldIdx === i;
         html += '<div class="world-card ' + (unlocked?"unlocked":"locked") + (current?" current":"") +
-            '" onclick="' + (unlocked?"selectWorld("+i+")":"") + '"><div class="world-icon">' + iconHTML(w.icon, "world-icon-img", w.name, i > 10 ? "secret" : "") + '</div>' +
+            '" onclick="' + (unlocked?"selectWorld("+i+")":"") + '"><div class="world-icon">' + iconHTML(w.icon, "world-icon-img", w.name) + '</div>' +
             '<div class="world-name">' + w.name + '</div><div class="world-req">' +
             (unlocked?(current?"★ Current":"Travel"):"🔒 "+w.reqRebirths+" RB") + '</div></div>';
     });
@@ -1430,7 +1436,7 @@ function renderAura() {
         const maxed = u.max && lvl >= u.max;
         const cost = auraUpCost(i), ok = game.aura >= cost && !maxed;
         html += '<button class="aura-card ' + (ok?"":"locked") + (maxed?" maxed":"") + '" onclick="buyAura(' + i + ')">' +
-            '<div class="up-ico">' + iconHTML(u.icon, "up-ico-img", u.name, u.effect) + '</div><div class="up-mid">' +
+            '<div class="up-ico">' + iconHTML(u.icon, "up-ico-img", u.name) + '</div><div class="up-mid">' +
             '<div class="up-name">' + u.name + '</div><div class="up-stat">' + u.desc + '</div>' +
             '<div class="aura-cost">' + (maxed ? "✅ UNLOCKED" : "✦ " + fmt(cost)) + '</div></div><div class="up-lvl">' + (u.max ? (maxed?"MAX":"") : "Lv " + lvl) + '</div></button>';
     });
@@ -1470,7 +1476,7 @@ function petChip(p, equipped) {
     const r = RARITY[p.rarity] || RARITY.common;
     const stars = p.star ? '<span class="pet-stars">' + "⭐".repeat(Math.min(p.star,5)) + '</span>' : '';
     return '<div class="pet-chip ' + (equipped?"equipped":"") + '" style="border-color:' + r.color + ';color:' + r.color + '" onclick="openPetModal(' + p.id + ')">' +
-        '<span class="pet-chip-emoji">' + iconHTML(p.emoji||"🐾", "pet-icon-img", p.name, p.rarity) + '</span>' + stars +
+        '<span class="pet-chip-emoji">' + iconHTML(p.emoji||"🐾", "pet-icon-img", p.name) + '</span>' + stars +
         '<span class="pet-chip-name">' + p.name + '</span>' +
         '<span class="pet-chip-pow">' + p.power.toFixed(2) + 'x</span>' +
         (equipped?'<span class="pet-chip-badge">✓</span>':'') + '</div>';
@@ -1537,7 +1543,7 @@ function renderFuse() {
         const stars = g.star ? "⭐".repeat(g.star) : "";
         const need = fuseNeeded(g.star);
         html += '<div class="fuse-card" style="border-color:' + r.color + '">' +
-            '<span class="pet-chip-emoji">' + iconHTML(g.emoji, "pet-icon-img", g.name, g.rarity) + '</span><span class="pet-stars">' + stars + '</span>' +
+            '<span class="pet-chip-emoji">' + iconHTML(g.emoji, "pet-icon-img", g.name) + '</span><span class="pet-stars">' + stars + '</span>' +
             '<span class="pet-chip-name" style="color:' + r.color + '">' + g.name + '</span>' +
             '<span class="fuse-count">' + g.items.length + ' / ' + need + '</span>' +
             '<button class="fuse-btn" onclick="fusePet(\'' + g.name.replace(/'/g,"\\'") + '\',' + g.star + ')">FUSE ' + need + ' →</button></div>';
@@ -1550,7 +1556,7 @@ function renderFuse() {
         pending.forEach(g => {
             const r = RARITY[g.rarity] || RARITY.common;
             html += '<div class="fuse-card dim" style="border-color:' + r.color + '">' +
-                '<span class="pet-chip-emoji">' + iconHTML(g.emoji, "pet-icon-img", g.name, g.rarity) + '</span>' +
+                '<span class="pet-chip-emoji">' + iconHTML(g.emoji, "pet-icon-img", g.name) + '</span>' +
                 '<span class="pet-chip-name" style="color:' + r.color + '">' + g.name + '</span>' +
                 '<span class="fuse-count">' + g.items.length + ' / ' + fuseNeeded(g.star) + '</span></div>';
         });
@@ -1587,7 +1593,7 @@ function renderIndex() {
     let chips = '<div class="dex-worlds">';
     WORLDS.forEach((w, i) => {
         if (game.rebirths < w.reqRebirths) return;
-        chips += '<button class="dex-chip ' + (indexWorld===i?"active":"") + '" onclick="setIndexWorld(' + i + ')">' + iconHTML(w.icon, "dex-chip-img", w.name, i > 10 ? "secret" : "") + ' ' + w.name + '</button>';
+        chips += '<button class="dex-chip ' + (indexWorld===i?"active":"") + '" onclick="setIndexWorld(' + i + ')">' + iconHTML(w.icon, "dex-chip-img", w.name) + ' ' + w.name + '</button>';
     });
     chips += '</div>';
 
@@ -1603,7 +1609,7 @@ function renderIndex() {
         const got = game.discovered[dexKey(indexWorld, p.name)];
         const pw = petPower(p.base, indexWorld);
         grid += '<div class="dex-cell ' + (got?"found":"locked") + '" style="border-color:' + (got?r.color:"rgba(120,110,160,0.3)") + '">' +
-            '<span class="dex-emoji ' + (got?"":"silhouette") + '">' + iconHTML(p.emoji, "dex-icon-img", got ? p.name : "Unknown pet", got ? p.rarity : "secret") + '</span>' +
+            '<span class="dex-emoji ' + (got?"":"silhouette") + '">' + iconHTML(p.emoji, "dex-icon-img", got ? p.name : "Unknown pet") + '</span>' +
             '<span class="dex-name" style="color:' + (got?r.color:"#6b6088") + '">' + (got?p.name:"???") + '</span>' +
             '<span class="dex-rarity" style="color:' + (got?r.color:"#6b6088") + '">' + (got?r.label:"???") + '</span>' +
             '<span class="dex-pow">' + (got?pw.toFixed(2)+"x":"—") + '</span></div>';
@@ -1629,7 +1635,7 @@ function openPetModal(id) {
     const equipped = (game.equippedPets||[]).some(x => x.id === id);
     const stars = p.star ? "⭐".repeat(Math.min(p.star,5)) : "";
     const d = document.getElementById("pet-details");
-    if (d) d.innerHTML = '<div class="pet-modal-emoji" style="filter:drop-shadow(0 0 18px ' + r.color + ')">' + iconHTML(p.emoji||"🐾", "pet-modal-icon-img", p.name, p.rarity) + '</div>' +
+    if (d) d.innerHTML = '<div class="pet-modal-emoji" style="filter:drop-shadow(0 0 18px ' + r.color + ')">' + iconHTML(p.emoji||"🐾", "pet-modal-icon-img", p.name) + '</div>' +
         '<div class="pet-modal-rarity" style="color:' + r.color + '">' + r.label + ' ' + stars + '</div>' +
         '<h3 class="pet-modal-name">' + p.name + '</h3>' +
         '<div class="pet-modal-row">Click Multiplier <b>' + p.power.toFixed(2) + 'x</b></div>' +
@@ -1827,7 +1833,7 @@ function renderEggShop() {
     getEggTemplates().forEach((egg, idx) => {
         const cost = eggCost(egg, game.worldIdx), ok = game.points >= cost;
         let odds = egg.pets.map(p => { const r=RARITY[p.rarity];
-            return '<div class="odds-row"><span style="color:' + r.color + '">' + iconHTML(p.emoji, "odds-icon-img", p.name, p.rarity) + ' ' + p.name + '</span><span class="odds-pct">' + p.odds + '%</span></div>'; }).join("");
+            return '<div class="odds-row"><span style="color:' + r.color + '">' + iconHTML(p.emoji, "odds-icon-img", p.name) + ' ' + p.name + '</span><span class="odds-pct">' + p.odds + '%</span></div>'; }).join("");
         let multiBtns = '';
         if (multiLvl > 0) {
             const ok3 = game.points >= cost * 3;
@@ -1838,7 +1844,7 @@ function renderEggShop() {
             multiBtns += '<button class="egg-buy-multi mega' + (ok10 ? '' : ' locked') + '" onclick="rollEggMulti(' + idx + ',10)">x10 · ' + fmt(cost * 10) + '</button>';
         }
         html += '<div class="egg-card" style="border-color:' + egg.color + '">' +
-            '<div class="egg-emoji" style="filter:drop-shadow(0 0 12px ' + egg.color + ')">' + iconHTML(egg.emoji, "egg-icon-img", egg.name, egg.id === "legendary" ? "legendaryEgg" : egg.id) + '</div>' +
+            '<div class="egg-emoji" style="filter:drop-shadow(0 0 12px ' + egg.color + ')">' + iconHTML(egg.emoji, "egg-icon-img", egg.name) + '</div>' +
             '<div class="egg-name" style="color:' + egg.color + '">' + egg.name + '</div>' +
             '<div class="egg-odds">' + odds + '</div>' +
             '<button class="egg-buy ' + (ok?"":"locked") + '" onclick="rollEgg(' + idx + ')">Open · ' + fmt(cost) + '</button>' +
@@ -1907,7 +1913,7 @@ function playHatch(pet, egg) {
 
     // reset
     resEl.innerHTML = ""; resEl.className = "hatch-result";
-    setIconNode(eggEl, egg.emoji, "hatch-egg-img", egg.name, egg.id === "legendary" ? "legendaryEgg" : egg.id); eggEl.className = "hatch-egg"; eggEl.style.filter = "";
+    setIconNode(eggEl, egg.emoji, "hatch-egg-img", egg.name); eggEl.className = "hatch-egg"; eggEl.style.filter = "";
     eggEl.style.transform = ""; eggEl.style.transition = ""; eggEl.style.opacity = "1";
     if (rays) { rays.style.opacity = "0"; rays.classList.remove("spin");
         rays.style.background = "conic-gradient(from 0deg," + r.color + "00," + r.color + "88," + r.color + "00," + r.color + "88," + r.color + "00)"; }
@@ -2046,7 +2052,7 @@ function playHatch(pet, egg) {
         const revealDelay = 280 + tier * 120;
         hatchDelay(() => {
             if (hatchFx) hatchFx.classList.add("revealed");
-            setIconNode(eggEl, pet.emoji, "hatch-pet-img", pet.name, pet.rarity);
+            setIconNode(eggEl, pet.emoji, "hatch-pet-img", pet.name);
             eggEl.style.opacity = "1";
             eggEl.style.transition = "transform 0.5s cubic-bezier(0.34,1.56,0.64,1), filter 0.5s ease";
             eggEl.style.transform = "scale(1)";
@@ -2347,7 +2353,7 @@ function spawnFlyingEgg() {
     el.style.filter = "drop-shadow(0 0 12px " + egg.color + ") drop-shadow(0 0 24px " + egg.color + ")";
     el.style.top = (15 + Math.random() * 50) + "%";
     el.style.left = "-70px";
-    setIconNode(el, egg.emoji, "bonus-icon-img", egg.name, egg.id === "legendary" ? "legendaryEgg" : egg.id);
+    setIconNode(el, egg.emoji, "bonus-icon-img", egg.name);
     el.style.transition = "left 7s linear";
     layer.appendChild(el);
     requestAnimationFrame(() => { el.style.left = "115%"; });
@@ -2438,6 +2444,7 @@ function initGame() {
         mainBtn.addEventListener("touchstart", function(ev){ ev.preventDefault(); const tp = ev.touches&&ev.touches[0]; handleMainClick({clientX: tp?tp.clientX:innerWidth/2, clientY: tp?tp.clientY:innerHeight/2}); }, { passive:false });
     }
     buildButtonDecor();
+    applyChromeIcons();
     startAmbientParticles();
     startAmbientEffects();
     addCornerGlows();
